@@ -2,6 +2,7 @@
 
 const DEFAULT_SETTINGS = {
   title: "大南六甲",
+  className: "",
   studentName: "",
   date: new Date().toISOString().slice(0, 10),
   startNumber: 1,
@@ -13,6 +14,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const titleInput = document.querySelector("#titleInput");
+const classInput = document.querySelector("#classInput");
 const nameInput = document.querySelector("#nameInput");
 const dateInput = document.querySelector("#dateInput");
 const startNumberInput = document.querySelector("#startNumberInput");
@@ -79,6 +81,9 @@ function saveSettings(settings) {
 
 function applySettings(settings) {
   titleInput.value = settings.title;
+  if (classInput) {
+    classInput.value = settings.className ?? "";
+  }
   nameInput.value = settings.studentName;
   dateInput.value = settings.date;
   startNumberInput.value = settings.startNumber;
@@ -92,6 +97,7 @@ function applySettings(settings) {
 function collectSettings() {
   return {
     title: titleInput.value.trim() || DEFAULT_SETTINGS.title,
+    className: classInput ? classInput.value.trim() : "",
     studentName: nameInput.value.trim(),
     date: dateInput.value,
     startNumber: clampNumber(startNumberInput.value, 1, 1000000, DEFAULT_SETTINGS.startNumber),
@@ -171,7 +177,9 @@ function renderPages() {
   }
 }
 
-[titleInput, nameInput, dateInput, startNumberInput, pageCountInput, columnCountInput, rowCountInput, guideSelect].forEach((element) => {
+[titleInput, classInput, nameInput, dateInput, startNumberInput, pageCountInput, columnCountInput, rowCountInput, guideSelect]
+  .filter(Boolean)
+  .forEach((element) => {
   element.addEventListener("input", renderPages);
   element.addEventListener("change", renderPages);
 });
