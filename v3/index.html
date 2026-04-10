@@ -1,0 +1,141 @@
+﻿<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>幾何練習簿</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Math AI-Grid Notbook</p>
+        <p class="version-pill">版本：第三版草稿 / 幾何練習簿(電腦版)</p>
+        <h1>幾何練習簿</h1>
+        <p class="subtitle">A4 直式，以逐格上傳幾何題目截圖為主，每格可獨立上傳一題，並在預覽與列印時維持正確排版。</p>
+      </div>
+      <div class="hero-actions">
+        <button id="resetButton" class="toggle-button secondary-button hero-reset-button" type="button">重設預設值</button>
+        <button id="printButton" class="primary-button" type="button">列印 / 另存 PDF</button>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="設定">
+      <label class="field">
+        <span>標題</span>
+        <input id="titleInput" type="text" value="大南六甲">
+      </label>
+
+      <label class="field field-hidden" aria-hidden="true">
+        <span>班級</span>
+        <input id="classInput" type="text" value="" tabindex="-1" autocomplete="off">
+      </label>
+
+      <label class="field">
+        <span>姓名</span>
+        <input id="nameInput" type="text" value="" placeholder="請輸入學生姓名">
+      </label>
+
+      <label class="field">
+        <span>日期</span>
+        <input id="dateInput" type="date">
+      </label>
+
+      <label class="field">
+        <span>起始編號</span>
+        <input id="startNumberInput" type="number" min="1" value="1">
+      </label>
+
+      <label class="field">
+        <span>頁數</span>
+        <input id="pageCountInput" type="number" min="1" max="50" value="1">
+      </label>
+
+      <label class="field">
+        <span>列數</span>
+        <input id="rowCountInput" type="number" min="1" max="12" value="4">
+      </label>
+
+      <label class="field">
+        <span>每格輔助線</span>
+        <select id="guideSelect">
+          <option value="horizontal">橫線</option>
+          <option value="dot">點</option>
+          <option value="none" selected>無</option>
+        </select>
+      </label>
+
+      <label class="field field-toggle">
+        <span>家長簽名</span>
+        <button id="signatureToggle" class="toggle-button" type="button" aria-pressed="true">顯示</button>
+      </label>
+
+      <div class="field field-wide helper-card">
+        <span>上傳方式</span>
+        <p class="helper-text">每個格子左上角都有獨立上傳區，可逐題上傳幾何題目截圖。預覽畫面會先顯示排版，列印時只保留題圖，不顯示上傳按鈕。</p>
+      </div>
+
+    </section>
+
+    <main id="pages" class="pages guide-cross show-signature" aria-live="polite"></main>
+  </div>
+
+  <template id="pageTemplate">
+    <section class="page">
+      <div class="page-header">
+        <div class="page-heading">
+          <h2 class="page-title"></h2>
+          <div class="page-info">
+            <div class="page-info-item">版型：<span class="page-layout"></span></div>
+            <div class="page-info-item">姓名：<span class="page-name"></span></div>
+            <div class="page-info-item">日期：<span class="page-date"></span></div>
+          </div>
+        </div>
+        <div class="page-signature">
+          <span class="signature-label">
+            <span>家長</span>
+            <span>簽名</span>
+          </span>
+          <span class="signature-box" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div class="grid"></div>
+      <div class="page-meta"></div>
+    </section>
+  </template>
+
+  <template id="cellTemplate">
+    <article class="cell">
+      <div class="cell-layout">
+        <section class="question-pane">
+          <div class="cell-number"></div>
+          <div class="cell-toolbar">
+            <label class="cell-upload">
+              <span>上傳題圖</span>
+              <input class="cell-upload-input" type="file" accept="image/*">
+            </label>
+            <label class="cell-replace-upload">
+              <span>更換題圖</span>
+              <input class="cell-upload-input cell-replace-input" type="file" accept="image/*">
+            </label>
+            <button class="cell-clear-button" type="button">清除</button>
+          </div>
+          <div class="cell-content"></div>
+        </section>
+        <section class="work-pane">
+          <div class="work-pane-title">計算程序區</div>
+          <div class="work-pane-body"></div>
+        </section>
+      </div>
+      <div class="cell-guides" aria-hidden="true">
+        <span class="guide horizontal"></span>
+        <span class="guide vertical"></span>
+        <span class="guide dot"></span>
+      </div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
