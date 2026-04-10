@@ -1,13 +1,14 @@
-const CELLS_PER_PAGE = 8;
 const STORAGE_KEY = "rowcolpage.v2.settings";
 
 const DEFAULT_SETTINGS = {
-  title: "大南國小",
+  title: "大南六甲",
   className: "",
   studentName: "",
   date: new Date().toISOString().slice(0, 10),
   startNumber: 1,
   pageCount: 1,
+  columnCount: 2,
+  rowCount: 4,
   guideMode: "cross",
   showSignature: true,
 };
@@ -18,6 +19,8 @@ const nameInput = document.querySelector("#nameInput");
 const dateInput = document.querySelector("#dateInput");
 const startNumberInput = document.querySelector("#startNumberInput");
 const pageCountInput = document.querySelector("#pageCountInput");
+const columnCountInput = document.querySelector("#columnCountInput");
+const rowCountInput = document.querySelector("#rowCountInput");
 const guideSelect = document.querySelector("#guideSelect");
 const signatureToggle = document.querySelector("#signatureToggle");
 const resetButton = document.querySelector("#resetButton");
@@ -83,6 +86,8 @@ function applySettings(settings) {
   dateInput.value = settings.date;
   startNumberInput.value = settings.startNumber;
   pageCountInput.value = settings.pageCount;
+  columnCountInput.value = settings.columnCount;
+  rowCountInput.value = settings.rowCount;
   guideSelect.value = settings.guideMode;
   updateSignatureVisibility(settings.showSignature);
 }
@@ -95,6 +100,8 @@ function collectSettings() {
     date: dateInput.value,
     startNumber: clampNumber(startNumberInput.value, 1, 1000000, DEFAULT_SETTINGS.startNumber),
     pageCount: clampNumber(pageCountInput.value, 1, 50, DEFAULT_SETTINGS.pageCount),
+    columnCount: clampNumber(columnCountInput.value, 1, 8, DEFAULT_SETTINGS.columnCount),
+    rowCount: clampNumber(rowCountInput.value, 1, 12, DEFAULT_SETTINGS.rowCount),
     guideMode: guideSelect.value,
     showSignature: getSignatureVisible(),
   };
@@ -121,9 +128,10 @@ function updateSignatureVisibility(showSignature) {
 function renderPages() {
   const settings = collectSettings();
   const title = settings.title;
-  const className = withFallback(settings.className, "________");
-  const studentName = withFallback(settings.studentName, "________");
+  const studentName = withFallback(settings.studentName, "________________");
   const displayDate = formatDisplayDate(settings.date);
+  const cellsPerPage = settings.columnCount * settings.rowCount;
+  const layoutLabel = `${settings.rowCount} 列 × ${settings.columnCount} 欄，共 ${cellsPerPage} 格`;
 
   pagesRoot.replaceChildren();
   updateGuideMode(settings.guideMode);
@@ -133,23 +141,31 @@ function renderPages() {
   for (let pageIndex = 0; pageIndex < settings.pageCount; pageIndex += 1) {
     const pageFragment = pageTemplate.content.cloneNode(true);
     const pageTitle = pageFragment.querySelector(".page-title");
-    const pageClass = pageFragment.querySelector(".page-class");
+    const pageLayout = pageFragment.querySelector(".page-layout");
     const pageName = pageFragment.querySelector(".page-name");
     const pageDate = pageFragment.querySelector(".page-date");
     const pageMeta = pageFragment.querySelector(".page-meta");
+    const pageHeader = pageFragment.querySelector(".page-header");
     const grid = pageFragment.querySelector(".grid");
     const page = pageFragment.querySelector(".page");
 
     pageTitle.textContent = title;
-    pageClass.textContent = className;
+    pageLayout.textContent = layoutLabel;
     pageName.textContent = studentName;
     pageDate.textContent = displayDate;
-    pageMeta.textContent = `第 ${pageIndex + 1} 頁`;
+    pageMeta.textContent = `第${pageIndex + 1}/${settings.pageCount}頁`;
+    grid.style.gridTemplateColumns = `repeat(${settings.columnCount}, minmax(0, 1fr))`;
+    grid.style.gridTemplateRows = `repeat(${settings.rowCount}, minmax(0, 1fr))`;
 
-    for (let cellIndex = 0; cellIndex < CELLS_PER_PAGE; cellIndex += 1) {
+    if (pageIndex > 0) {
+      page.classList.add("page-following");
+      pageHeader.remove();
+    }
+
+    for (let cellIndex = 0; cellIndex < cellsPerPage; cellIndex += 1) {
       const cellFragment = cellTemplate.content.cloneNode(true);
       const cellNumber = cellFragment.querySelector(".cell-number");
-      const number = settings.startNumber + pageIndex * CELLS_PER_PAGE + cellIndex;
+      const number = settings.startNumber + pageIndex * cellsPerPage + cellIndex;
 
       cellNumber.textContent = number;
       grid.appendChild(cellFragment);
@@ -159,7 +175,7 @@ function renderPages() {
   }
 }
 
-[titleInput, classInput, nameInput, dateInput, startNumberInput, pageCountInput, guideSelect].forEach((element) => {
+[titleInput, classInput, nameInput, dateInput, startNumberInput, pageCountInput, columnCountInput, rowCountInput, guideSelect].forEach((element) => {
   element.addEventListener("input", renderPages);
   element.addEventListener("change", renderPages);
 });

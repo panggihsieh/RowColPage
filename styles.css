@@ -39,6 +39,12 @@ body {
   margin-bottom: 24px;
 }
 
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   font-size: 0.9rem;
@@ -82,7 +88,7 @@ h1 {
 
 .controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
   padding: 20px;
   border: 1px solid rgba(154, 52, 18, 0.12);
@@ -128,7 +134,17 @@ h1 {
 }
 
 .secondary-button {
-  background: #fff8ef;
+  border: 1px solid rgba(154, 52, 18, 0.18);
+  background: linear-gradient(135deg, #fff1dd, #ffd7a8);
+  color: var(--accent-deep);
+  font-weight: 800;
+  box-shadow: 0 12px 30px rgba(217, 119, 6, 0.18);
+}
+
+.hero-reset-button {
+  width: auto;
+  min-width: 148px;
+  transform: translateY(-1px);
 }
 
 .pages {
@@ -153,8 +169,16 @@ h1 {
   display: flex;
   justify-content: space-between;
   align-items: start;
-  gap: 16px;
-  margin-bottom: 6mm;
+  gap: 12px;
+  margin-bottom: 4mm;
+}
+
+.page-following .grid {
+  margin-top: 0;
+}
+
+.page-following .page-header {
+  display: none !important;
 }
 
 .page-title,
@@ -164,19 +188,23 @@ h1 {
 
 .page-heading {
   display: grid;
-  gap: 3mm;
+  gap: 1.5mm;
+  flex: 1;
+  min-width: 0;
 }
 
 .page-title {
-  font-size: 1.35rem;
+  font-size: 2rem;
 }
 
 .page-info {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px 18px;
+  flex-wrap: nowrap;
+  gap: 6px 12px;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.82rem;
+  line-height: 1.15;
+  min-width: 0;
 }
 
 .page-info-item {
@@ -185,12 +213,18 @@ h1 {
 
 .page-signature {
   display: flex;
-  align-items: end;
-  gap: 16px;
+  align-items: center;
+  gap: 10px;
   min-width: 120px;
   color: var(--muted);
   font-weight: 700;
   text-align: center;
+}
+
+.signature-label {
+  display: grid;
+  gap: 2px;
+  line-height: 1.1;
 }
 
 .pages.hide-signature .page-signature {
@@ -200,7 +234,7 @@ h1 {
 .signature-box {
   display: inline-block;
   width: 120px;
-  height: 36px;
+  height: 48px;
   border: 1.5px solid var(--grid-line);
   border-radius: 6px;
 }
@@ -211,13 +245,6 @@ h1 {
   width: 100%;
   text-align: center;
   margin-top: 6mm;
-}
-
-.page-version {
-  color: var(--muted);
-  font-size: 0.9rem;
-  text-align: center;
-  margin-top: 3mm;
 }
 
 .grid {
@@ -338,6 +365,17 @@ h1 {
     align-items: start;
   }
 
+  .hero-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .hero-reset-button,
+  .primary-button {
+    width: 100%;
+  }
+
   .page-signature {
     display: grid;
     gap: 8px;
@@ -347,10 +385,6 @@ h1 {
 
   .page-meta {
     margin-top: 0;
-    text-align: left;
-  }
-
-  .page-version {
     text-align: left;
   }
 
@@ -411,10 +445,6 @@ h1 {
 
   .page-meta {
     margin-top: 6mm;
-    text-align: center;
-  }
-
-  .page-version {
     text-align: center;
   }
 
