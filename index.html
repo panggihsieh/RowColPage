@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>大南國小</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Math Eight-Grid Notebook</p>
+        <h1>大南國小</h1>
+        <p class="subtitle">A4 直式、每頁 8 格，編號依左到右、上到下排列。</p>
+      </div>
+      <button id="printButton" class="primary-button" type="button">列印 / 另存 PDF</button>
+    </header>
+
+    <section class="controls" aria-label="設定">
+      <label class="field">
+        <span>標題</span>
+        <input id="titleInput" type="text" value="大南國小">
+      </label>
+
+      <label class="field">
+        <span>起始編號</span>
+        <input id="startNumberInput" type="number" min="1" value="1">
+      </label>
+
+      <label class="field">
+        <span>頁數</span>
+        <input id="pageCountInput" type="number" min="1" max="50" value="1">
+      </label>
+
+      <label class="field">
+        <span>每格輔助線</span>
+        <select id="guideSelect">
+          <option value="horizontal">橫線</option>
+          <option value="cross" selected>十字線</option>
+          <option value="dot">點</option>
+          <option value="none">無</option>
+        </select>
+      </label>
+
+      <label class="field field-toggle">
+        <span>家長簽名</span>
+        <button id="signatureToggle" class="toggle-button" type="button" aria-pressed="true">顯示</button>
+      </label>
+    </section>
+
+    <main id="pages" class="pages guide-cross show-signature" aria-live="polite"></main>
+  </div>
+
+  <template id="pageTemplate">
+    <section class="page">
+      <div class="page-header">
+        <h2 class="page-title"></h2>
+        <div class="page-signature">
+          <span>家長簽名</span>
+          <span class="signature-box" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div class="grid"></div>
+      <div class="page-meta"></div>
+    </section>
+  </template>
+
+  <template id="cellTemplate">
+    <article class="cell">
+      <div class="cell-number"></div>
+      <div class="cell-guides" aria-hidden="true">
+        <span class="guide horizontal"></span>
+        <span class="guide vertical"></span>
+        <span class="guide dot"></span>
+      </div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
