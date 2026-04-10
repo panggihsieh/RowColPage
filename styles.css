@@ -311,40 +311,68 @@ h1 {
     padding-top: 20px;
   }
 
-  .hero,
-  .page-header {
+  .hero {
     flex-direction: column;
     align-items: start;
   }
 
+  .page-header {
+    align-items: start;
+    gap: 10px;
+    margin-bottom: 4mm;
+  }
+
   .page-signature {
-    display: grid;
-    gap: 8px;
+    gap: 10px;
     min-width: 0;
-    width: 100%;
   }
 
   .page-meta {
-    margin-top: 0;
-    text-align: left;
+    margin-top: 4mm;
+    text-align: center;
   }
 
   .page-version {
-    text-align: left;
+    text-align: center;
   }
 
-  .controls,
-  .grid {
+  .controls {
     grid-template-columns: 1fr;
   }
 
   .page {
-    width: 100%;
-    padding: 20px;
+    width: min(100%, 210mm);
+    height: auto;
+    aspect-ratio: 210 / 297;
+    padding: 10px;
+  }
+
+  .page-title {
+    font-size: 1.1rem;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .cell {
-    min-height: 180px;
+    min-height: 0;
+    border-radius: 14px;
+  }
+
+  .cell-number {
+    top: 8px;
+    left: 8px;
+    min-width: 34px;
+    padding: 4px 8px;
+    font-size: 0.9rem;
+  }
+
+  .signature-box {
+    width: 90px;
+    height: 28px;
   }
 }
 
