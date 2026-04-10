@@ -131,20 +131,59 @@ h1 {
   color: var(--ink);
   font: inherit;
   cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    filter 180ms ease;
 }
 
 .secondary-button {
-  border: 1px solid rgba(154, 52, 18, 0.18);
-  background: linear-gradient(135deg, #fff1dd, #ffd7a8);
-  color: var(--accent-deep);
+  border: 1px solid rgba(250, 204, 21, 0.95);
+  background: linear-gradient(135deg, #fde047, #facc15);
+  color: #111827;
   font-weight: 800;
-  box-shadow: 0 12px 30px rgba(217, 119, 6, 0.18);
+  box-shadow: 0 12px 30px rgba(250, 204, 21, 0.28);
+  animation: resetButtonPulse 2.6s ease-in-out infinite;
 }
 
 .hero-reset-button {
   width: auto;
   min-width: 148px;
   transform: translateY(-1px);
+}
+
+.hero-reset-button:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 16px 36px rgba(250, 204, 21, 0.36);
+  filter: brightness(1.04);
+}
+
+.hero-reset-button:active {
+  transform: translateY(-1px) scale(0.99);
+}
+
+@keyframes resetButtonPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 12px 30px rgba(250, 204, 21, 0.28),
+      0 0 0 0 rgba(250, 204, 21, 0.18);
+  }
+
+  50% {
+    box-shadow:
+      0 16px 38px rgba(250, 204, 21, 0.36),
+      0 0 0 10px rgba(250, 204, 21, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle-button,
+  .secondary-button,
+  .hero-reset-button {
+    animation: none;
+    transition: none;
+  }
 }
 
 .pages {
