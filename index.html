@@ -11,9 +11,9 @@
     <header class="hero">
       <div>
         <p class="eyebrow">Math Eight-Grid Notebook</p>
-        <p class="version-pill">版本：第一版 / 八格簿</p>
+        <p class="version-pill">版本：第二版草稿 / 八格簿</p>
         <h1>大南國小</h1>
-        <p class="subtitle">A4 直式、每頁 8 格，編號依左到右、上到下排列。</p>
+        <p class="subtitle">A4 直式、每頁 8 格，加入班級、姓名、日期欄位與設定記憶功能。</p>
       </div>
       <button id="printButton" class="primary-button" type="button">列印 / 另存 PDF</button>
     </header>
@@ -22,6 +22,21 @@
       <label class="field">
         <span>標題</span>
         <input id="titleInput" type="text" value="大南國小">
+      </label>
+
+      <label class="field">
+        <span>班級</span>
+        <input id="classInput" type="text" value="" placeholder="例如：三甲">
+      </label>
+
+      <label class="field">
+        <span>姓名</span>
+        <input id="nameInput" type="text" value="" placeholder="請輸入學生姓名">
+      </label>
+
+      <label class="field">
+        <span>日期</span>
+        <input id="dateInput" type="date">
       </label>
 
       <label class="field">
@@ -48,6 +63,11 @@
         <span>家長簽名</span>
         <button id="signatureToggle" class="toggle-button" type="button" aria-pressed="true">顯示</button>
       </label>
+
+      <label class="field field-toggle">
+        <span>設定</span>
+        <button id="resetButton" class="toggle-button secondary-button" type="button">重設預設值</button>
+      </label>
     </section>
 
     <main id="pages" class="pages guide-cross show-signature" aria-live="polite"></main>
@@ -56,14 +76,21 @@
   <template id="pageTemplate">
     <section class="page">
       <div class="page-header">
-        <h2 class="page-title"></h2>
+        <div class="page-heading">
+          <h2 class="page-title"></h2>
+          <div class="page-info">
+            <div class="page-info-item">班級：<span class="page-class"></span></div>
+            <div class="page-info-item">姓名：<span class="page-name"></span></div>
+            <div class="page-info-item">日期：<span class="page-date"></span></div>
+          </div>
+        </div>
         <div class="page-signature">
           <span>家長簽名</span>
           <span class="signature-box" aria-hidden="true"></span>
         </div>
       </div>
       <div class="grid"></div>
-      <div class="page-version">版本：第一版 / 八格簿</div>
+      <div class="page-version">版本：第二版草稿 / 八格簿</div>
       <div class="page-meta"></div>
     </section>
   </template>
