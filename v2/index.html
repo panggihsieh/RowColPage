@@ -1,0 +1,122 @@
+﻿<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自學筆記</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Math AI-Grid Notbook</p>
+        <p class="version-pill">版本：第二版草稿 / 多格簿(電腦版)</p>
+        <h1>自學筆記</h1>
+        <p class="subtitle">A4 直式，可依欄數與列數調整每頁格數，並支援班級、姓名、日期與設定記憶功能。</p>
+      </div>
+      <div class="hero-actions">
+        <button id="resetButton" class="toggle-button secondary-button hero-reset-button" type="button">重設預設值</button>
+        <button id="printButton" class="primary-button" type="button">列印 / 另存 PDF</button>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="設定">
+      <label class="field">
+        <span>標題</span>
+        <input id="titleInput" type="text" value="大南六甲">
+      </label>
+
+      <label class="field">
+        <span>班級</span>
+        <input id="classInput" type="text" value="" placeholder="例如：三甲">
+      </label>
+
+      <label class="field">
+        <span>姓名</span>
+        <input id="nameInput" type="text" value="" placeholder="請輸入學生姓名">
+      </label>
+
+      <label class="field">
+        <span>日期</span>
+        <input id="dateInput" type="date">
+      </label>
+
+      <label class="field">
+        <span>起始編號</span>
+        <input id="startNumberInput" type="number" min="1" value="1">
+      </label>
+
+      <label class="field">
+        <span>頁數</span>
+        <input id="pageCountInput" type="number" min="1" max="50" value="1">
+      </label>
+
+      <label class="field">
+        <span>欄數</span>
+        <input id="columnCountInput" type="number" min="1" max="8" value="2">
+      </label>
+
+      <label class="field">
+        <span>列數</span>
+        <input id="rowCountInput" type="number" min="1" max="12" value="4">
+      </label>
+
+      <label class="field">
+        <span>每格輔助線</span>
+        <select id="guideSelect">
+          <option value="horizontal">橫線</option>
+          <option value="cross" selected>十字線</option>
+          <option value="dot">點</option>
+          <option value="none">無</option>
+        </select>
+      </label>
+
+      <label class="field field-toggle">
+        <span>家長簽名</span>
+        <button id="signatureToggle" class="toggle-button" type="button" aria-pressed="true">顯示</button>
+      </label>
+
+    </section>
+
+    <main id="pages" class="pages guide-cross show-signature" aria-live="polite"></main>
+  </div>
+
+  <template id="pageTemplate">
+    <section class="page">
+      <div class="page-header">
+        <div class="page-heading">
+          <h2 class="page-title"></h2>
+          <div class="page-info">
+            <div class="page-info-item">版型：<span class="page-layout"></span></div>
+            <div class="page-info-item">姓名：<span class="page-name"></span></div>
+            <div class="page-info-item">日期：<span class="page-date"></span></div>
+          </div>
+        </div>
+        <div class="page-signature">
+          <span class="signature-label">
+            <span>家長</span>
+            <span>簽名</span>
+          </span>
+          <span class="signature-box" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div class="grid"></div>
+      <div class="page-meta"></div>
+    </section>
+  </template>
+
+  <template id="cellTemplate">
+    <article class="cell">
+      <div class="cell-number"></div>
+      <div class="cell-guides" aria-hidden="true">
+        <span class="guide horizontal"></span>
+        <span class="guide vertical"></span>
+        <span class="guide dot"></span>
+      </div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
