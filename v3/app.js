@@ -14,6 +14,8 @@ const DEFAULT_SETTINGS = {
 };
 
 const uploadedImages = new Map();
+const cellBindings = new Map();
+let activePasteImageIndex = null;
 
 const titleInput = document.querySelector("#titleInput");
 const classInput = document.querySelector("#classInput");
@@ -127,13 +129,43 @@ function updateSignatureVisibility(showSignature) {
   signatureToggle.setAttribute("aria-pressed", String(showSignature));
 }
 
-function readImageFile(file) {
+function readBlobAsDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(blob);
   });
+}
+
+function getImageFileFromClipboardData(clipboardData) {
+  const items = Array.from(clipboardData?.items ?? []);
+
+  for (const item of items) {
+    if (item.kind === "file" && item.type.startsWith("image/")) {
+      return item.getAsFile();
+    }
+  }
+
+  return null;
+}
+
+async function readClipboardImage() {
+  if (!navigator.clipboard?.read) {
+    return null;
+  }
+
+  const clipboardItems = await navigator.clipboard.read();
+
+  for (const clipboardItem of clipboardItems) {
+    const imageType = clipboardItem.types.find((type) => type.startsWith("image/"));
+
+    if (imageType) {
+      return clipboardItem.getType(imageType);
+    }
+  }
+
+  return null;
 }
 
 function renderCellImage(container, pane, imageUrl) {
@@ -148,19 +180,58 @@ function renderCellImage(container, pane, imageUrl) {
 
   const image = document.createElement("img");
   image.className = "problem-image";
-  image.alt = "幾何題目截圖";
+  image.alt = "幾何題目圖片";
   image.src = imageUrl;
   container.appendChild(image);
 }
 
+function updatePasteTargetState() {
+  cellBindings.forEach(({ pane, pasteButton }, imageIndex) => {
+    const isActive = imageIndex === activePasteImageIndex;
+    pane.classList.toggle("is-paste-target", isActive);
+    pasteButton.classList.toggle("is-active", isActive);
+  });
+}
+
+function setActivePasteTarget(imageIndex) {
+  activePasteImageIndex = imageIndex;
+  updatePasteTargetState();
+}
+
+async function applyImageToCell(imageIndex, blobOrFile) {
+  const imageUrl = await readBlobAsDataUrl(blobOrFile);
+  uploadedImages.set(imageIndex, imageUrl);
+
+  const binding = cellBindings.get(imageIndex);
+
+  if (!binding) {
+    return;
+  }
+
+  renderCellImage(binding.content, binding.pane, imageUrl);
+  binding.clearButton.hidden = false;
+}
+
 function bindCellUpload(cell, imageIndex) {
   const uploadInputs = cell.querySelectorAll(".cell-upload-input");
+  const pasteButton = cell.querySelector(".cell-paste-button");
   const clearButton = cell.querySelector(".cell-clear-button");
   const content = cell.querySelector(".cell-content");
   const pane = cell.querySelector(".question-pane");
 
+  pane.tabIndex = 0;
+  pane.setAttribute("title", "點一下這格後可直接按 Ctrl+V 貼上截圖");
+
+  cellBindings.set(imageIndex, {
+    pane,
+    content,
+    clearButton,
+    pasteButton,
+  });
+
   renderCellImage(content, pane, uploadedImages.get(imageIndex) ?? "");
   clearButton.hidden = !uploadedImages.has(imageIndex);
+  updatePasteTargetState();
 
   uploadInputs.forEach((uploadInput) => {
     uploadInput.addEventListener("change", async () => {
@@ -171,14 +242,49 @@ function bindCellUpload(cell, imageIndex) {
       }
 
       try {
-        const imageUrl = await readImageFile(file);
-        uploadedImages.set(imageIndex, imageUrl);
-        renderCellImage(content, pane, imageUrl);
-        clearButton.hidden = false;
+        setActivePasteTarget(imageIndex);
+        await applyImageToCell(imageIndex, file);
       } finally {
         uploadInput.value = "";
       }
     });
+  });
+
+  const activatePasteTarget = () => {
+    setActivePasteTarget(imageIndex);
+  };
+
+  cell.addEventListener("click", activatePasteTarget);
+  pane.addEventListener("focus", activatePasteTarget);
+
+  pane.addEventListener("paste", async (event) => {
+    const imageFile = getImageFileFromClipboardData(event.clipboardData);
+
+    if (!imageFile) {
+      return;
+    }
+
+    event.preventDefault();
+    setActivePasteTarget(imageIndex);
+    await applyImageToCell(imageIndex, imageFile);
+  });
+
+  pasteButton.addEventListener("click", async () => {
+    setActivePasteTarget(imageIndex);
+
+    try {
+      const imageBlob = await readClipboardImage();
+
+      if (!imageBlob) {
+        window.alert("剪貼簿中沒有圖片，請先複製截圖後再貼上。");
+        return;
+      }
+
+      await applyImageToCell(imageIndex, imageBlob);
+    } catch (error) {
+      console.error(error);
+      window.alert("目前瀏覽器沒有允許讀取剪貼簿圖片，請改用 Ctrl+V 貼上，或使用上傳題圖。");
+    }
   });
 
   clearButton.addEventListener("click", () => {
@@ -194,9 +300,15 @@ function renderPages() {
   const studentName = withFallback(settings.studentName, "________________");
   const displayDate = formatDisplayDate(settings.date);
   const cellsPerPage = settings.rowCount;
-  const layoutLabel = `固定兩欄版型，共 ${cellsPerPage} 題`;
+  const totalCells = settings.pageCount * cellsPerPage;
+  const layoutLabel = `單欄 / 每頁 ${cellsPerPage} 題`;
+
+  if (activePasteImageIndex !== null && activePasteImageIndex >= totalCells) {
+    activePasteImageIndex = null;
+  }
 
   pagesRoot.replaceChildren();
+  cellBindings.clear();
   updateGuideMode(settings.guideMode);
   updateSignatureVisibility(settings.showSignature);
   saveSettings(settings);
@@ -216,7 +328,7 @@ function renderPages() {
     pageLayout.textContent = layoutLabel;
     pageName.textContent = studentName;
     pageDate.textContent = displayDate;
-    pageMeta.textContent = `第${pageIndex + 1}/${settings.pageCount}頁`;
+    pageMeta.textContent = `第 ${pageIndex + 1} / ${settings.pageCount} 頁`;
     grid.style.gridTemplateColumns = "repeat(1, minmax(0, 1fr))";
     grid.style.gridTemplateRows = `repeat(${settings.rowCount}, minmax(0, 1fr))`;
 
@@ -256,12 +368,28 @@ signatureToggle.addEventListener("click", () => {
 resetButton.addEventListener("click", () => {
   localStorage.removeItem(STORAGE_KEY);
   uploadedImages.clear();
+  activePasteImageIndex = null;
   applySettings({ ...DEFAULT_SETTINGS });
   renderPages();
 });
 
 printButton.addEventListener("click", () => {
   window.print();
+});
+
+document.addEventListener("paste", async (event) => {
+  if (activePasteImageIndex === null) {
+    return;
+  }
+
+  const imageFile = getImageFileFromClipboardData(event.clipboardData);
+
+  if (!imageFile) {
+    return;
+  }
+
+  event.preventDefault();
+  await applyImageToCell(activePasteImageIndex, imageFile);
 });
 
 applySettings(loadSettings());

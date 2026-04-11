@@ -317,6 +317,12 @@ h1 {
   padding: 0 12px 0 0;
 }
 
+.question-pane.is-paste-target {
+  outline: 3px solid rgba(217, 119, 6, 0.3);
+  outline-offset: 6px;
+  border-radius: 14px;
+}
+
 .question-pane.has-image {
   padding: 0;
 }
@@ -393,6 +399,23 @@ h1 {
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+.cell-paste-button {
+  border: 1px solid rgba(217, 119, 6, 0.3);
+  background: rgba(255, 248, 235, 0.96);
+  color: var(--accent-deep);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cell-paste-button.is-active {
+  background: rgba(217, 119, 6, 0.18);
+  border-color: rgba(217, 119, 6, 0.55);
 }
 
 .question-pane.has-image .cell-upload {
