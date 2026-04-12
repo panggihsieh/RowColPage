@@ -147,7 +147,7 @@ function renderQuestions() {
 
     const anchorText = document.createElement("p");
     anchorText.className = "selector-question-title";
-    anchorText.textContent = question.title;
+    anchorText.textContent = question.detailText || question.title;
 
     meta.append(title, source, anchorText);
     label.append(checkbox, sourcePreview, thumb, meta);

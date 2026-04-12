@@ -9,7 +9,7 @@
   <title>原始數學題目克隆簿</title>
   <script>
     (() => {
-      const version = "20260412e";
+      const version = "20260412g";
       const url = new URL(window.location.href);
       if (url.searchParams.get("v") !== version) {
         url.searchParams.set("v", version);
@@ -17,7 +17,7 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="styles.css?v=20260412e">
+  <link rel="stylesheet" href="styles.css?v=20260412g">
 </head>
 <body>
   <div class="app-shell">
@@ -146,8 +146,8 @@
       </div>
       <div id="questionPreviewList" class="question-preview-list"></div>
       <div id="questionReviewActions" class="question-review-actions" hidden>
-        <p class="helper-text">請先點縮圖放大檢查；確認題目範圍都正確後，再前往下一頁。</p>
-        <button id="confirmExtractedButton" class="primary-button" type="button">確定題目，前往下一頁</button>
+        <p id="questionReviewHint" class="helper-text">請逐題確認裁切與 OCR 文字，全部完成後才能前往下一頁。</p>
+        <button id="confirmExtractedButton" class="primary-button" type="button" disabled>全部確認完成，前往下一頁</button>
       </div>
     </section>
 
@@ -167,7 +167,24 @@
       </div>
       <div class="preview-modal-grid">
         <div class="preview-modal-card">
-          <h3>原始頁面定位</h3>
+          <div class="preview-modal-card-header">
+            <h3>原始頁面定位</h3>
+            <button id="previewResetCropButton" class="toggle-button preview-zoom-button" type="button">恢復自動裁切</button>
+          </div>
+          <div class="preview-modal-toolbar preview-modal-toolbar-inline" aria-label="裁切工具列">
+            <div class="preview-toolbar-group preview-toolbar-move" aria-label="移動裁切框">
+              <button id="previewMoveUpButton" class="toggle-button preview-tool-button" type="button" aria-label="上移">↑</button>
+              <div class="preview-toolbar-row">
+                <button id="previewMoveLeftButton" class="toggle-button preview-tool-button" type="button" aria-label="左移">←</button>
+                <button id="previewMoveDownButton" class="toggle-button preview-tool-button" type="button" aria-label="下移">↓</button>
+                <button id="previewMoveRightButton" class="toggle-button preview-tool-button" type="button" aria-label="右移">→</button>
+              </div>
+            </div>
+            <div class="preview-toolbar-group preview-toolbar-zoom" aria-label="縮放裁切框">
+              <button id="previewWidenButton" class="toggle-button preview-tool-button preview-tool-button-wide" type="button" aria-label="加寬">加寬</button>
+              <button id="previewHeightenButton" class="toggle-button preview-tool-button preview-tool-button-wide" type="button" aria-label="加高">加高</button>
+            </div>
+          </div>
           <div id="previewModalSourcePreview" class="preview-modal-source-preview"></div>
         </div>
         <div class="preview-modal-card">
@@ -177,10 +194,21 @@
               <button id="previewZoomOutButton" class="toggle-button preview-zoom-button" type="button">縮小</button>
               <button id="previewZoomResetButton" class="toggle-button preview-zoom-button" type="button">100%</button>
               <button id="previewZoomInButton" class="toggle-button preview-zoom-button" type="button">放大</button>
-              <span id="previewZoomValue" class="preview-zoom-value">100%</span>
             </div>
           </div>
+          <div class="preview-zoom-status"><span id="previewZoomValue" class="preview-zoom-value">100%</span></div>
+          <div class="preview-modal-actions">
+            <button id="previewRunOcrButton" class="primary-button" type="button">確認裁切並 AI 辨識</button>
+            <span id="previewReviewStatus" class="preview-review-status">請先確認裁切範圍。</span>
+          </div>
           <div id="previewModalQuestionPreview" class="preview-modal-question-preview"></div>
+          <label class="field field-wide preview-text-field">
+            <span>題目文字（可手動修改）</span>
+            <textarea id="previewTextEditor" rows="8" spellcheck="false" placeholder="先確認裁切，再按「確認裁切並 AI 辨識」取得題目文字。"></textarea>
+          </label>
+          <div class="preview-modal-actions preview-modal-actions-end">
+            <button id="previewSaveButton" class="primary-button" type="button">確認文字並儲存此題</button>
+          </div>
         </div>
       </div>
     </section>
@@ -242,6 +270,6 @@
     </article>
   </template>
 
-  <script type="module" src="app.js?v=20260412e"></script>
+  <script type="module" src="app.js?v=20260412g"></script>
 </body>
 </html>

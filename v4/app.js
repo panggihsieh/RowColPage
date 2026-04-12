@@ -2,7 +2,7 @@ import * as pdfjsLib from "./vendor/pdf.mjs";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("./vendor/pdf.worker.mjs", import.meta.url).toString();
 
-const APP_ASSET_VERSION = "20260412e";
+const APP_ASSET_VERSION = "20260412g";
 const STORAGE_KEY = "rowcolpage.v4.settings.v3";
 const SELECTOR_CHANNEL_NAME = "rowcolpage-v4-selector";
 const SELECTOR_DB_NAME = "rowcolpage-v4";
@@ -14,6 +14,7 @@ const CONTENT_RGB_THRESHOLD = 244;
 const CONTENT_ALPHA_THRESHOLD = 18;
 const CONTENT_MARGIN_PX = 28;
 const CROPPED_CONTENT_MARGIN_PX = 32;
+const MIN_CROP_SIZE = 24;
 
 const DEFAULT_SETTINGS = {
   title: "大南六甲",
@@ -35,11 +36,13 @@ const DEFAULT_SETTINGS = {
 };
 
 const uploadedImages = new Map();
+const uploadedQuestionTexts = new Map();
 const cellBindings = new Map();
 let activePasteImageIndex = null;
 let sourceFiles = [];
 let currentSourceLabel = "";
 let extractedQuestions = [];
+let latestSourcePages = [];
 let selectorWindow = null;
 let selectorWindowReady = false;
 let ocrWorkerPromise = null;
@@ -49,6 +52,7 @@ const selectorChannel =
     ? new BroadcastChannel(SELECTOR_CHANNEL_NAME)
     : null;
 let selectorDbPromise = null;
+const sourcePageCanvasCache = new Map();
 
 const titleInput = document.querySelector("#titleInput");
 const classInput = document.querySelector("#classInput");
@@ -77,6 +81,7 @@ const clearExtractedButton = document.querySelector("#clearExtractedButton");
 const extractionSummary = document.querySelector("#extractionSummary");
 const questionPreviewList = document.querySelector("#questionPreviewList");
 const questionReviewActions = document.querySelector("#questionReviewActions");
+const questionReviewHint = document.querySelector("#questionReviewHint");
 const confirmExtractedButton = document.querySelector("#confirmExtractedButton");
 const previewModal = document.querySelector("#previewModal");
 const previewModalSource = document.querySelector("#previewModalSource");
@@ -89,8 +94,33 @@ const previewZoomOutButton = document.querySelector("#previewZoomOutButton");
 const previewZoomResetButton = document.querySelector("#previewZoomResetButton");
 const previewZoomInButton = document.querySelector("#previewZoomInButton");
 const previewZoomValue = document.querySelector("#previewZoomValue");
+const previewResetCropButton = document.querySelector("#previewResetCropButton");
+const previewMoveUpButton = document.querySelector("#previewMoveUpButton");
+const previewMoveLeftButton = document.querySelector("#previewMoveLeftButton");
+const previewMoveRightButton = document.querySelector("#previewMoveRightButton");
+const previewMoveDownButton = document.querySelector("#previewMoveDownButton");
+const previewWidenButton = document.querySelector("#previewWidenButton");
+const previewHeightenButton = document.querySelector("#previewHeightenButton");
+const previewRunOcrButton = document.querySelector("#previewRunOcrButton");
+const previewReviewStatus = document.querySelector("#previewReviewStatus");
+const previewTextEditor = document.querySelector("#previewTextEditor");
+const previewSaveButton = document.querySelector("#previewSaveButton");
 let previewQuestionZoom = 1;
 let previewQuestionStage = null;
+let previewSourceStage = null;
+let previewCropBox = null;
+let previewQuestionId = null;
+let previewOriginalBounds = null;
+let previewDraftBounds = null;
+let previewDraftText = "";
+let previewRecognizedText = "";
+let previewHasRecognizedText = false;
+let previewCropDirty = false;
+let previewSyncPromise = null;
+let previewPointerState = null;
+let previewPointerListenersBound = false;
+const PREVIEW_NUDGE_STEP = 6;
+const PREVIEW_RESIZE_STEP = 8;
 
 function clampNumber(value, min, max, fallback) {
   const parsed = Number.parseFloat(value);
@@ -126,6 +156,47 @@ function escapeRegExp(value) {
 
 function normalizeText(value) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeMultilineText(value) {
+  return String(value ?? "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function findQuestionById(questionId) {
+  return extractedQuestions.find((question) => question.id === questionId) ?? null;
+}
+
+function getQuestionIndexById(questionId) {
+  return extractedQuestions.findIndex((question) => question.id === questionId);
+}
+
+function getFirstPendingQuestion() {
+  return extractedQuestions.find((question) => !question.isConfirmed) ?? null;
+}
+
+function getNextPendingQuestion(afterQuestionId = null) {
+  if (!extractedQuestions.length) {
+    return null;
+  }
+
+  const startIndex = afterQuestionId ? getQuestionIndexById(afterQuestionId) + 1 : 0;
+
+  for (let index = startIndex; index < extractedQuestions.length; index += 1) {
+    if (!extractedQuestions[index].isConfirmed) {
+      return extractedQuestions[index];
+    }
+  }
+
+  return getFirstPendingQuestion();
+}
+
+function getPendingReviewCount() {
+  return extractedQuestions.filter((question) => !question.isConfirmed).length;
 }
 
 function getSignatureVisible() {
@@ -343,21 +414,36 @@ async function readClipboardImage() {
   return null;
 }
 
-function renderCellImage(container, pane, imageUrl) {
+function renderCellContent(container, pane, imageUrl, text = "") {
   container.replaceChildren();
   container.classList.remove("is-empty");
+  pane.classList.toggle("has-question-text", Boolean(text));
   pane.classList.toggle("has-image", Boolean(imageUrl));
 
-  if (!imageUrl) {
+  if (!imageUrl && !text) {
     container.classList.add("is-empty");
     return;
   }
 
-  const image = document.createElement("img");
-  image.className = "problem-image";
-  image.alt = "題目圖片";
-  image.src = imageUrl;
-  container.appendChild(image);
+  const stack = document.createElement("div");
+  stack.className = "question-content-stack";
+
+  if (text) {
+    const problemText = document.createElement("div");
+    problemText.className = "problem-text";
+    problemText.textContent = normalizeMultilineText(text);
+    stack.appendChild(problemText);
+  }
+
+  if (imageUrl) {
+    const image = document.createElement("img");
+    image.className = "problem-image";
+    image.alt = "題目圖片";
+    image.src = imageUrl;
+    stack.appendChild(image);
+  }
+
+  container.appendChild(stack);
 }
 
 function updatePasteTargetState() {
@@ -383,7 +469,8 @@ async function applyImageToCell(imageIndex, blobOrFile) {
     return;
   }
 
-  renderCellImage(binding.content, binding.pane, imageUrl);
+  uploadedQuestionTexts.delete(imageIndex);
+  renderCellContent(binding.content, binding.pane, imageUrl, "");
   binding.clearButton.hidden = false;
 }
 
@@ -404,8 +491,8 @@ function bindCellUpload(cell, imageIndex) {
     pasteButton,
   });
 
-  renderCellImage(content, pane, uploadedImages.get(imageIndex) ?? "");
-  clearButton.hidden = !uploadedImages.has(imageIndex);
+  renderCellContent(content, pane, uploadedImages.get(imageIndex) ?? "", uploadedQuestionTexts.get(imageIndex) ?? "");
+  clearButton.hidden = !uploadedImages.has(imageIndex) && !uploadedQuestionTexts.has(imageIndex);
   updatePasteTargetState();
 
   uploadInputs.forEach((uploadInput) => {
@@ -464,7 +551,8 @@ function bindCellUpload(cell, imageIndex) {
 
   clearButton.addEventListener("click", () => {
     uploadedImages.delete(imageIndex);
-    renderCellImage(content, pane, "");
+    uploadedQuestionTexts.delete(imageIndex);
+    renderCellContent(content, pane, "", "");
     clearButton.hidden = true;
   });
 }
@@ -474,7 +562,20 @@ function updateReviewActionsVisibility() {
     return;
   }
 
-  questionReviewActions.hidden = !extractedQuestions.length;
+  const pendingCount = getPendingReviewCount();
+  const totalCount = extractedQuestions.length;
+  questionReviewActions.hidden = !totalCount;
+
+  if (questionReviewHint) {
+    const firstPendingQuestion = getFirstPendingQuestion();
+    questionReviewHint.textContent = pendingCount
+      ? `目前共有 ${totalCount} 題，請從 ${firstPendingQuestion?.numberLabel ?? "第一題"} 開始逐題確認；每儲存一題後會自動前往下一題。`
+      : `共 ${totalCount} 題都已確認完成，現在可以前往下一頁勾選並準備列印。`;
+  }
+
+  if (confirmExtractedButton) {
+    confirmExtractedButton.disabled = pendingCount > 0;
+  }
 }
 
 function clampPreviewZoom(value) {
@@ -493,6 +594,408 @@ function updatePreviewZoomDisplay() {
   }
 }
 
+function clampQuestionBounds(bounds, pageWidth, pageHeight) {
+  const left = clampNumber(bounds.left, 0, Math.max(0, pageWidth - MIN_CROP_SIZE), 0);
+  const top = clampNumber(bounds.top, 0, Math.max(0, pageHeight - MIN_CROP_SIZE), 0);
+  const right = clampNumber(bounds.right, left + MIN_CROP_SIZE, pageWidth, pageWidth);
+  const bottom = clampNumber(bounds.bottom, top + MIN_CROP_SIZE, pageHeight, pageHeight);
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+  };
+}
+
+function resetPreviewDraftState() {
+  previewQuestionId = null;
+  previewOriginalBounds = null;
+  previewDraftBounds = null;
+  previewDraftText = "";
+  previewRecognizedText = "";
+  previewHasRecognizedText = false;
+  previewCropDirty = false;
+  previewPointerState = null;
+  previewSourceStage = null;
+  previewCropBox = null;
+  previewSyncPromise = null;
+}
+
+function bindPreviewPointerListeners() {
+  if (previewPointerListenersBound) {
+    return;
+  }
+
+  window.addEventListener("mousemove", handlePreviewPointerMove);
+  window.addEventListener("mouseup", stopPreviewPointer);
+  previewPointerListenersBound = true;
+}
+
+function unbindPreviewPointerListeners() {
+  if (!previewPointerListenersBound) {
+    return;
+  }
+
+  window.removeEventListener("mousemove", handlePreviewPointerMove);
+  window.removeEventListener("mouseup", stopPreviewPointer);
+  previewPointerListenersBound = false;
+}
+
+async function getSourcePageCanvas(sourceIndex) {
+  if (sourcePageCanvasCache.has(sourceIndex)) {
+    return sourcePageCanvasCache.get(sourceIndex);
+  }
+
+  const sourcePage = latestSourcePages[sourceIndex];
+
+  if (!sourcePage) {
+    throw new Error(`Missing source page at index ${sourceIndex}.`);
+  }
+
+  const canvas = await sourcePage.renderCanvas();
+  sourcePageCanvasCache.set(sourceIndex, canvas);
+  return canvas;
+}
+
+function getSourcePageScale(sourceIndex) {
+  return latestSourcePages[sourceIndex]?.sourceType === "pdf" ? PDF_RENDER_SCALE : 1;
+}
+
+async function buildQuestionCropResult(question, bounds) {
+  const pageCanvas = await getSourcePageCanvas(question.sourceIndex);
+  const scale = getSourcePageScale(question.sourceIndex);
+  const croppedCanvas = cropQuestionCanvas(pageCanvas, bounds, scale);
+
+  return {
+    canvas: croppedCanvas,
+    imageUrl: croppedCanvas.toDataURL("image/png"),
+  };
+}
+
+function renderPreviewCropBox() {
+  if (!previewCropBox || !previewDraftBounds) {
+    return;
+  }
+
+  const question = findQuestionById(previewQuestionId);
+
+  if (!question) {
+    return;
+  }
+
+  previewCropBox.style.left = `${(previewDraftBounds.left / question.pageWidth) * 100}%`;
+  previewCropBox.style.top = `${(previewDraftBounds.top / question.pageHeight) * 100}%`;
+  previewCropBox.style.width = `${((previewDraftBounds.right - previewDraftBounds.left) / question.pageWidth) * 100}%`;
+  previewCropBox.style.height = `${((previewDraftBounds.bottom - previewDraftBounds.top) / question.pageHeight) * 100}%`;
+}
+
+function updatePreviewReviewStatus(statusText = "") {
+  const currentText = normalizeMultilineText(previewTextEditor?.value ?? previewDraftText);
+  const needsRecognition = previewCropDirty || !previewHasRecognizedText;
+
+  if (previewRunOcrButton) {
+    previewRunOcrButton.disabled = previewRunOcrButton.dataset.busy === "true" || !previewQuestionId;
+  }
+
+  if (previewTextEditor) {
+    previewTextEditor.disabled = Boolean(previewQuestionId) ? needsRecognition : true;
+  }
+
+  if (previewSaveButton) {
+    previewSaveButton.disabled = !previewQuestionId || needsRecognition || !currentText;
+  }
+
+  if (previewReviewStatus) {
+    if (statusText) {
+      previewReviewStatus.textContent = statusText;
+    } else if (!previewQuestionId) {
+      previewReviewStatus.textContent = "請先選擇題目。";
+    } else if (needsRecognition) {
+      previewReviewStatus.textContent = "裁切範圍已更新，請按「確認裁切並 AI 辨識」。";
+    } else if (currentText) {
+      previewReviewStatus.textContent = "AI 辨識完成，請檢查文字後儲存此題。";
+    } else {
+      previewReviewStatus.textContent = "AI 辨識完成，如有需要可手動輸入題目文字。";
+    }
+  }
+}
+
+async function syncPreviewQuestionImage() {
+  const question = findQuestionById(previewQuestionId);
+
+  if (!question || !previewDraftBounds || !previewModalQuestionPreview) {
+    return;
+  }
+
+  const syncPromise = (async () => {
+    const cropResult = await buildQuestionCropResult(question, previewDraftBounds);
+
+    if (previewQuestionId !== question.id) {
+      return;
+    }
+
+    const questionImage = document.createElement("img");
+    questionImage.src = cropResult.imageUrl;
+    questionImage.alt = `${question.numberLabel} 題目預覽`;
+
+    previewQuestionStage = document.createElement("div");
+    previewQuestionStage.className = "preview-modal-question-stage";
+    previewQuestionStage.appendChild(questionImage);
+    previewModalQuestionPreview.replaceChildren(previewQuestionStage);
+    previewQuestionZoom = 1;
+    updatePreviewZoomDisplay();
+  })();
+
+  previewSyncPromise = syncPromise;
+  await syncPromise;
+}
+
+function setPreviewDraftBounds(bounds, { markDirty = true } = {}) {
+  const question = findQuestionById(previewQuestionId);
+
+  if (!question) {
+    return;
+  }
+
+  previewDraftBounds = clampQuestionBounds(bounds, question.pageWidth, question.pageHeight);
+
+  if (markDirty) {
+    previewCropDirty = true;
+    previewHasRecognizedText = false;
+  }
+
+  renderPreviewCropBox();
+  updatePreviewReviewStatus();
+}
+
+function nudgePreviewBounds({ dx = 0, dy = 0, growX = 0, growY = 0 } = {}) {
+  if (!previewDraftBounds || !previewQuestionId) {
+    return;
+  }
+
+  const currentWidth = previewDraftBounds.right - previewDraftBounds.left;
+  const currentHeight = previewDraftBounds.bottom - previewDraftBounds.top;
+  const nextBounds = {
+    left: previewDraftBounds.left + dx - growX,
+    right: previewDraftBounds.right + dx + growX,
+    top: previewDraftBounds.top + dy - growY,
+    bottom: previewDraftBounds.bottom + dy + growY,
+  };
+
+  if (growX < 0 || growY < 0) {
+    const nextWidth = currentWidth + growX * 2;
+    const nextHeight = currentHeight + growY * 2;
+
+    if ((growX < 0 && nextWidth < MIN_CROP_SIZE) || (growY < 0 && nextHeight < MIN_CROP_SIZE)) {
+      return;
+    }
+  }
+
+  setPreviewDraftBounds(nextBounds, { markDirty: true });
+  void syncPreviewQuestionImage();
+}
+
+function stopPreviewPointer() {
+  if (!previewPointerState) {
+    return;
+  }
+
+  previewPointerState = null;
+  unbindPreviewPointerListeners();
+  void syncPreviewQuestionImage();
+}
+
+function handlePreviewPointerMove(event) {
+  if (!previewPointerState) {
+    return;
+  }
+
+  const question = findQuestionById(previewQuestionId);
+
+  if (!question) {
+    return;
+  }
+
+  const { startBounds, startX, startY, rectWidth, rectHeight, handle } = previewPointerState;
+  const deltaX = ((event.clientX - startX) / rectWidth) * question.pageWidth;
+  const deltaY = ((event.clientY - startY) / rectHeight) * question.pageHeight;
+  const nextBounds = { ...startBounds };
+
+  if (handle === "move") {
+    const width = startBounds.right - startBounds.left;
+    const height = startBounds.bottom - startBounds.top;
+    nextBounds.left = startBounds.left + deltaX;
+    nextBounds.top = startBounds.top + deltaY;
+    nextBounds.right = nextBounds.left + width;
+    nextBounds.bottom = nextBounds.top + height;
+
+    if (nextBounds.left < 0) {
+      nextBounds.right -= nextBounds.left;
+      nextBounds.left = 0;
+    }
+
+    if (nextBounds.top < 0) {
+      nextBounds.bottom -= nextBounds.top;
+      nextBounds.top = 0;
+    }
+
+    if (nextBounds.right > question.pageWidth) {
+      const overflow = nextBounds.right - question.pageWidth;
+      nextBounds.left -= overflow;
+      nextBounds.right = question.pageWidth;
+    }
+
+    if (nextBounds.bottom > question.pageHeight) {
+      const overflow = nextBounds.bottom - question.pageHeight;
+      nextBounds.top -= overflow;
+      nextBounds.bottom = question.pageHeight;
+    }
+  } else {
+    if (handle.includes("n")) {
+      nextBounds.top = startBounds.top + deltaY;
+    }
+
+    if (handle.includes("s")) {
+      nextBounds.bottom = startBounds.bottom + deltaY;
+    }
+
+    if (handle.includes("w")) {
+      nextBounds.left = startBounds.left + deltaX;
+    }
+
+    if (handle.includes("e")) {
+      nextBounds.right = startBounds.right + deltaX;
+    }
+  }
+
+  setPreviewDraftBounds(nextBounds, { markDirty: true });
+}
+
+function startPreviewPointer(handle, event) {
+  if (!previewSourceStage || !previewDraftBounds) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const rect = previewSourceStage.getBoundingClientRect();
+  previewPointerState = {
+    handle,
+    startX: event.clientX,
+    startY: event.clientY,
+    rectWidth: Math.max(rect.width, 1),
+    rectHeight: Math.max(rect.height, 1),
+    startBounds: { ...previewDraftBounds },
+  };
+  bindPreviewPointerListeners();
+}
+
+function getPreviewFallbackText(question, bounds) {
+  const sourcePage = latestSourcePages[question?.sourceIndex ?? -1];
+  const titleMatchers = compileTitleMatchers(collectSettings().titlePatterns);
+  const extractedText = sourcePage
+    ? extractQuestionText(sourcePage.lines, bounds, titleMatchers)
+    : "";
+
+  return normalizeMultilineText(extractedText || question?.detailText || question?.title || "");
+}
+
+async function runPreviewRecognition() {
+  const question = findQuestionById(previewQuestionId);
+
+  if (!question || !previewDraftBounds) {
+    return;
+  }
+
+  previewRunOcrButton.dataset.busy = "true";
+  previewRunOcrButton.disabled = true;
+  updatePreviewReviewStatus("AI 辨識中，請稍候...");
+
+  try {
+    const cropResult = await buildQuestionCropResult(question, previewDraftBounds);
+    const worker = await getOcrWorker();
+    const result = await worker.recognize(cropResult.canvas);
+    const fallbackText = getPreviewFallbackText(question, previewDraftBounds);
+    const recognizedText = normalizeMultilineText(result.data?.text ?? "") || fallbackText;
+
+    previewRecognizedText = recognizedText;
+    previewHasRecognizedText = true;
+    previewCropDirty = false;
+    previewDraftText = recognizedText || question.detailText || question.title;
+
+    if (previewTextEditor) {
+      previewTextEditor.value = previewDraftText;
+    }
+
+    await syncPreviewQuestionImage();
+    updatePreviewReviewStatus("AI 辨識完成，請檢查文字後儲存此題。");
+  } catch (error) {
+    console.error(error);
+    const fallbackText = getPreviewFallbackText(question, previewDraftBounds);
+
+    previewRecognizedText = fallbackText;
+    previewHasRecognizedText = true;
+    previewCropDirty = false;
+    previewDraftText = fallbackText;
+
+    if (previewTextEditor) {
+      previewTextEditor.value = fallbackText;
+    }
+
+    await syncPreviewQuestionImage();
+    updatePreviewReviewStatus(
+      fallbackText
+        ? "AI 辨識失敗，已改用目前抽取文字，請手動修正後儲存此題。"
+        : "AI 辨識失敗，請直接輸入題目文字後儲存此題。",
+    );
+  } finally {
+    previewRunOcrButton.dataset.busy = "false";
+    previewRunOcrButton.disabled = false;
+  }
+}
+
+async function savePreviewQuestion() {
+  const question = findQuestionById(previewQuestionId);
+  const finalizedText = normalizeMultilineText(previewTextEditor?.value ?? previewDraftText);
+
+  if (!question || !previewDraftBounds || !finalizedText) {
+    updatePreviewReviewStatus("請先完成 AI 辨識，並確認文字內容。");
+    return;
+  }
+
+  previewSaveButton.disabled = true;
+  updatePreviewReviewStatus("儲存此題中...");
+
+  try {
+    const currentQuestionId = question.id;
+    const cropResult = await buildQuestionCropResult(question, previewDraftBounds);
+    question.bounds = { ...previewDraftBounds };
+    question.overlay = buildOverlayFromBounds(question.bounds, question.pageWidth, question.pageHeight);
+    question.imageUrl = cropResult.imageUrl;
+    question.detailText = finalizedText;
+    question.ocrText = previewRecognizedText || finalizedText;
+    question.isConfirmed = true;
+
+    renderQuestionPreviewList();
+    sendQuestionsToSelectorWindow();
+    updateReviewActionsVisibility();
+    closePreviewModal();
+
+    const nextPendingQuestion = getNextPendingQuestion(currentQuestionId);
+
+    if (nextPendingQuestion && !nextPendingQuestion.isConfirmed) {
+      extractionSummary.textContent = `已確認 ${question.numberLabel}，請繼續下一題：${nextPendingQuestion.numberLabel}。`;
+      void openPreviewModal(nextPendingQuestion);
+    } else {
+      extractionSummary.textContent = "全部題目都已確認完成，現在可以前往下一頁勾選。";
+    }
+  } finally {
+    previewSaveButton.disabled = false;
+  }
+}
+
 function closePreviewModal() {
   if (!previewModal) {
     return;
@@ -504,46 +1007,87 @@ function closePreviewModal() {
   previewModalQuestionPreview?.replaceChildren();
   previewQuestionZoom = 1;
   previewQuestionStage = null;
+
+  if (previewTextEditor) {
+    previewTextEditor.value = "";
+    previewTextEditor.disabled = true;
+  }
+
+  if (previewRunOcrButton) {
+    previewRunOcrButton.dataset.busy = "false";
+    previewRunOcrButton.disabled = false;
+  }
+
+  resetPreviewDraftState();
+  unbindPreviewPointerListeners();
+  updatePreviewReviewStatus();
 }
 
-function openPreviewModal(question) {
+async function openPreviewModal(question) {
   if (!previewModal || !question) {
     return;
   }
+
+  const firstPendingQuestion = getFirstPendingQuestion();
+
+  if (
+    firstPendingQuestion
+    && question.id !== firstPendingQuestion.id
+    && !question.isConfirmed
+    && getPendingReviewCount() > 0
+  ) {
+    window.alert(`請依序確認題目，先完成 ${firstPendingQuestion.numberLabel}。`);
+    question = firstPendingQuestion;
+  }
+
+  previewQuestionId = question.id;
+  previewOriginalBounds = { ...question.bounds };
+  previewDraftBounds = { ...question.bounds };
+  previewDraftText = question.detailText || "";
+  previewRecognizedText = question.ocrText || "";
+  previewHasRecognizedText = Boolean(question.isConfirmed && (question.ocrText || question.detailText));
+  previewCropDirty = false;
 
   const sourceImage = document.createElement("img");
   sourceImage.src = question.pagePreviewUrl;
   sourceImage.alt = `${question.numberLabel} 原始頁面`;
 
-  const sourceRect = document.createElement("div");
-  sourceRect.className = "question-source-rect";
-  sourceRect.style.left = `${question.overlay.leftPercent}%`;
-  sourceRect.style.top = `${question.overlay.topPercent}%`;
-  sourceRect.style.width = `${question.overlay.widthPercent}%`;
-  sourceRect.style.height = `${question.overlay.heightPercent}%`;
+  previewCropBox = document.createElement("div");
+  previewCropBox.className = "question-source-rect question-source-rect-editable";
+  previewCropBox.addEventListener("mousedown", (event) => startPreviewPointer("move", event));
 
-  const sourceStage = document.createElement("div");
-  sourceStage.className = "preview-modal-source-stage";
+  ["nw", "ne", "sw", "se"].forEach((handle) => {
+    const cropHandle = document.createElement("button");
+    cropHandle.type = "button";
+    cropHandle.className = `crop-handle crop-handle-${handle}`;
+    cropHandle.setAttribute("aria-label", `調整 ${handle} 裁切角`);
+    cropHandle.addEventListener("mousedown", (event) => startPreviewPointer(handle, event));
+    previewCropBox.appendChild(cropHandle);
+  });
 
-  sourceStage.append(sourceImage, sourceRect);
-
-  const questionImage = document.createElement("img");
-  questionImage.src = question.imageUrl;
-  questionImage.alt = `${question.numberLabel} 題目預覽`;
-
-  previewQuestionStage = document.createElement("div");
-  previewQuestionStage.className = "preview-modal-question-stage";
-  previewQuestionStage.appendChild(questionImage);
+  previewSourceStage = document.createElement("div");
+  previewSourceStage.className = "preview-modal-source-stage";
+  previewSourceStage.append(sourceImage, previewCropBox);
 
   previewModalSource.textContent = question.sourceLabel;
   previewModalTitle.textContent = question.numberLabel;
   previewModalAnchor.textContent = question.detailText || question.title;
-  previewModalSourcePreview.replaceChildren(sourceStage);
-  previewModalQuestionPreview.replaceChildren(previewQuestionStage);
-  previewQuestionZoom = 1;
-  updatePreviewZoomDisplay();
+  previewModalSourcePreview.replaceChildren(previewSourceStage);
+
+  if (previewTextEditor) {
+    previewTextEditor.value = previewDraftText;
+  }
+
+  renderPreviewCropBox();
+  const questionIndex = getQuestionIndexById(question.id) + 1;
+  updatePreviewReviewStatus(
+    question.isConfirmed
+      ? `第 ${questionIndex} / ${extractedQuestions.length} 題已確認，可繼續微調後重新儲存。`
+      : `現在處理第 ${questionIndex} / ${extractedQuestions.length} 題，請先確認裁切，再進行 AI 辨識。`,
+  );
   previewModal.hidden = false;
   document.body.classList.add("preview-modal-open");
+  await syncPreviewQuestionImage();
 }
 
 function renderQuestionPreviewList() {
@@ -563,6 +1107,7 @@ function renderQuestionPreviewList() {
   extractedQuestions.forEach((question) => {
     const card = document.createElement("article");
     card.className = "question-preview-card";
+    card.dataset.confirmed = String(Boolean(question.isConfirmed));
     card.tabIndex = 0;
     card.setAttribute("role", "button");
     card.setAttribute("aria-label", `${question.numberLabel}，點一下放大檢視`);
@@ -602,13 +1147,19 @@ function renderQuestionPreviewList() {
     title.className = "question-preview-title";
     title.textContent = question.detailText || question.title;
 
-    meta.append(heading, source, title);
+    const status = document.createElement("p");
+    status.className = "question-preview-status";
+    status.textContent = question.isConfirmed ? "已確認裁切與文字" : "待確認裁切與文字";
+
+    meta.append(heading, source, title, status);
     card.append(sourcePreview, thumb, meta);
-    card.addEventListener("click", () => openPreviewModal(question));
+    card.addEventListener("click", () => {
+      void openPreviewModal(question);
+    });
     card.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        openPreviewModal(question);
+        void openPreviewModal(question);
       }
     });
     fragment.appendChild(card);
@@ -642,7 +1193,8 @@ function buildSelectorPayload(questions) {
 }
 
 function sendQuestionsToSelectorWindow() {
-  const payload = buildSelectorPayload(extractedQuestions);
+  const readyQuestions = extractedQuestions.length && getPendingReviewCount() === 0 ? extractedQuestions : [];
+  const payload = buildSelectorPayload(readyQuestions);
 
   if (!payload) {
     void writeSelectorPayload(null);
@@ -661,7 +1213,7 @@ function sendQuestionsToSelectorWindow() {
 }
 
 function handleSelectorRequest() {
-  if (!extractedQuestions.length) {
+  if (!extractedQuestions.length || getPendingReviewCount() > 0) {
     selectorChannel?.postMessage({ type: "v4-selector-clear", updatedAt: Date.now() });
     return;
   }
@@ -914,7 +1466,7 @@ function matchTitleLines(lines, patterns, pageInfo) {
     }));
 }
 
-function extractQuestionText(lines, bounds, pageWidth) {
+function extractQuestionText(lines, bounds, titleMatchers = []) {
   const textLines = lines
     .filter((line) => line.bottom >= bounds.top && line.top <= bounds.bottom)
     .filter((line) => line.right >= bounds.left && line.left <= bounds.right)
@@ -924,18 +1476,26 @@ function extractQuestionText(lines, bounds, pageWidth) {
         return normalizeText(line.text);
       }
 
+      const pageWidth = Number.POSITIVE_INFINITY;
       const filteredItems = line.items
         .filter((item) => item.x < pageWidth * 0.66 || item.text.length > 2 || /[()（）]/.test(item.text))
         .sort((a, b) => a.x - b.x);
 
-      if (!filteredItems.length) {
+      const boundedItems = line.items
+        .filter((item) => {
+          const itemRight = item.x + Math.max(item.width || 0, 1);
+          return itemRight >= bounds.left && item.x <= bounds.right;
+        })
+        .sort((a, b) => a.x - b.x);
+
+      if (!boundedItems.length) {
         return "";
       }
 
       let text = "";
 
-      filteredItems.forEach((item, index) => {
-        const previous = filteredItems[index - 1];
+      boundedItems.forEach((item, index) => {
+        const previous = boundedItems[index - 1];
 
         if (!previous) {
           text = item.text;
@@ -951,7 +1511,17 @@ function extractQuestionText(lines, bounds, pageWidth) {
     })
     .filter(Boolean);
 
-  const merged = normalizeText(textLines.join(" "));
+  const mergedLines = [];
+
+  for (const textLine of textLines) {
+    if (mergedLines.length > 0 && titleMatchers.some((pattern) => pattern.test(textLine))) {
+      break;
+    }
+
+    mergedLines.push(textLine);
+  }
+
+  const merged = normalizeText(mergedLines.join(" "));
   const startIndex = merged.search(/[（(]\s*[）)]\s*\d+\s*[.．、]|第\s*\d+\s*題|\d+\s*[.．、]/u);
   const normalized = startIndex >= 0 ? merged.slice(startIndex).trim() : merged;
   const optionMatch = normalized.match(/^(.*?\(\s*[AaＡ]\s*\).*?\(\s*[DdＤ]\s*\)[^。]*(?:。|$))/u);
@@ -1020,7 +1590,7 @@ async function renderPdfPageToCanvas(page, scale) {
   return canvas;
 }
 
-function cropQuestionImage(pageCanvas, bounds, scale) {
+function cropQuestionCanvas(pageCanvas, bounds, scale) {
   const sx = Math.max(0, Math.floor(bounds.left * scale));
   const sy = Math.max(0, Math.floor(bounds.top * scale));
   const sw = Math.max(10, Math.floor((bounds.right - bounds.left) * scale));
@@ -1035,7 +1605,11 @@ function cropQuestionImage(pageCanvas, bounds, scale) {
   context.fillRect(0, 0, sw, sh);
   context.drawImage(pageCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
 
-  return trimCanvasToVisibleContent(croppedCanvas, CROPPED_CONTENT_MARGIN_PX).toDataURL("image/png");
+  return trimCanvasToVisibleContent(croppedCanvas, CROPPED_CONTENT_MARGIN_PX);
+}
+
+function cropQuestionImage(pageCanvas, bounds, scale) {
+  return cropQuestionCanvas(pageCanvas, bounds, scale).toDataURL("image/png");
 }
 
 function trimCanvasToVisibleContent(canvas, marginPx) {
@@ -1230,9 +1804,11 @@ function applyExtractedQuestions(questions) {
   }
 
   uploadedImages.clear();
+  uploadedQuestionTexts.clear();
 
   questions.forEach((question, index) => {
     uploadedImages.set(index, question.imageUrl);
+    uploadedQuestionTexts.set(index, question.detailText || "");
   });
 
   activePasteImageIndex = questions.length ? 0 : null;
@@ -1245,6 +1821,7 @@ function applySelectedQuestionIds(selectedIds) {
 
   if (!selectedQuestions.length) {
     uploadedImages.clear();
+    uploadedQuestionTexts.clear();
     activePasteImageIndex = null;
     renderPages();
     extractionSummary.textContent = "勾選頁沒有選任何題目，主頁未帶入題圖。";
@@ -1252,12 +1829,15 @@ function applySelectedQuestionIds(selectedIds) {
   }
 
   applyExtractedQuestions(selectedQuestions);
-  extractionSummary.textContent = `已依序帶入 ${selectedQuestions.length} 題到左側題目區。`;
+  extractionSummary.textContent = `已依序帶入 ${selectedQuestions.length} 題到左側題目區（題目文字 + 題圖）。`;
 }
 
 function clearExtractedQuestions() {
   extractedQuestions = [];
+  latestSourcePages = [];
+  sourcePageCanvasCache.clear();
   uploadedImages.clear();
+  uploadedQuestionTexts.clear();
   activePasteImageIndex = null;
   sendQuestionsToSelectorWindow();
   renderQuestionPreviewList();
@@ -1286,6 +1866,8 @@ async function extractQuestionsFromSources() {
 
   try {
     const sourcePages = await buildSourcePages(sourceFiles);
+    latestSourcePages = sourcePages;
+    sourcePageCanvasCache.clear();
     const anchors = [];
 
     sourcePages.forEach((pageInfo, sourceIndex) => {
@@ -1350,7 +1932,7 @@ async function extractQuestionsFromSources() {
       }
 
       const numberLabel = deriveQuestionNumberLabel(anchor.title, index + 1);
-      const detailText = extractQuestionText(sourcePages[anchor.sourceIndex].lines, bounds, anchor.pageWidth) || anchor.title;
+      const detailText = extractQuestionText(sourcePages[anchor.sourceIndex].lines, bounds, titleMatchers) || anchor.title;
 
       questions.push({
         id: `q-${index + 1}`,
@@ -1358,18 +1940,31 @@ async function extractQuestionsFromSources() {
         title: anchor.title,
         detailText,
         sourceLabel: anchor.sourceLabel,
+        sourceIndex: anchor.sourceIndex,
         pageNumber: anchor.pageNumber,
+        pageWidth: anchor.pageWidth,
+        pageHeight: anchor.pageHeight,
+        bounds,
         imageUrl,
         pagePreviewUrl,
         overlay: buildOverlayFromBounds(bounds, anchor.pageWidth, anchor.pageHeight),
+        ocrText: "",
+        isConfirmed: false,
       });
     }
 
     extractedQuestions = questions;
     renderQuestionPreviewList();
-    extractionSummary.textContent = `已從 ${currentSourceLabel} 抽出 ${questions.length} 題，請先點縮圖放大檢查，確認後再前往下一頁。`;
+    extractionSummary.textContent = `已從 ${currentSourceLabel} 抽出 ${questions.length} 題，現在開始逐題確認。`;
     sendQuestionsToSelectorWindow();
     document.querySelector(".question-bank")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const firstPendingQuestion = getFirstPendingQuestion();
+
+    if (firstPendingQuestion) {
+      window.setTimeout(() => {
+        void openPreviewModal(firstPendingQuestion);
+      }, 80);
+    }
   } catch (error) {
     console.error(error);
     extractionSummary.textContent = "來源分析失敗，請確認檔案內容清楚且含有題號。";
@@ -1441,8 +2036,11 @@ resetButton.addEventListener("click", () => {
   localStorage.removeItem(STORAGE_KEY);
   closePreviewModal();
   uploadedImages.clear();
+  uploadedQuestionTexts.clear();
   activePasteImageIndex = null;
   extractedQuestions = [];
+  latestSourcePages = [];
+  sourcePageCanvasCache.clear();
   sourceFiles = [];
   currentSourceLabel = "";
   sourceFileInput.value = "";
@@ -1459,6 +2057,8 @@ printButton.addEventListener("click", () => {
 sourceFileInput.addEventListener("change", () => {
   closePreviewModal();
   sourceFiles = Array.from(sourceFileInput.files ?? []);
+  latestSourcePages = [];
+  sourcePageCanvasCache.clear();
   currentSourceLabel = sourceFiles.length === 1
     ? sourceFiles[0].name
     : sourceFiles.length
@@ -1500,6 +2100,42 @@ previewModal?.addEventListener("click", (event) => {
 });
 
 previewModalCloseButton?.addEventListener("click", closePreviewModal);
+previewResetCropButton?.addEventListener("click", () => {
+  if (!previewOriginalBounds) {
+    return;
+  }
+
+  setPreviewDraftBounds({ ...previewOriginalBounds }, { markDirty: true });
+  void syncPreviewQuestionImage();
+});
+previewMoveUpButton?.addEventListener("click", () => {
+  nudgePreviewBounds({ dy: -PREVIEW_NUDGE_STEP });
+});
+previewMoveLeftButton?.addEventListener("click", () => {
+  nudgePreviewBounds({ dx: -PREVIEW_NUDGE_STEP });
+});
+previewMoveRightButton?.addEventListener("click", () => {
+  nudgePreviewBounds({ dx: PREVIEW_NUDGE_STEP });
+});
+previewMoveDownButton?.addEventListener("click", () => {
+  nudgePreviewBounds({ dy: PREVIEW_NUDGE_STEP });
+});
+previewWidenButton?.addEventListener("click", () => {
+  nudgePreviewBounds({ growX: PREVIEW_RESIZE_STEP });
+});
+previewHeightenButton?.addEventListener("click", () => {
+  nudgePreviewBounds({ growY: PREVIEW_RESIZE_STEP });
+});
+previewRunOcrButton?.addEventListener("click", () => {
+  void runPreviewRecognition();
+});
+previewTextEditor?.addEventListener("input", () => {
+  previewDraftText = previewTextEditor.value;
+  updatePreviewReviewStatus();
+});
+previewSaveButton?.addEventListener("click", () => {
+  void savePreviewQuestion();
+});
 previewZoomOutButton?.addEventListener("click", () => {
   previewQuestionZoom = clampPreviewZoom(previewQuestionZoom - 0.25);
   updatePreviewZoomDisplay();
@@ -1516,6 +2152,46 @@ previewZoomInButton?.addEventListener("click", () => {
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && previewModal && !previewModal.hidden) {
     closePreviewModal();
+    return;
+  }
+
+  if (!previewModal || previewModal.hidden || document.activeElement === previewTextEditor) {
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    nudgePreviewBounds({ dy: -PREVIEW_NUDGE_STEP });
+    return;
+  }
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    nudgePreviewBounds({ dy: PREVIEW_NUDGE_STEP });
+    return;
+  }
+
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    nudgePreviewBounds({ dx: -PREVIEW_NUDGE_STEP });
+    return;
+  }
+
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    nudgePreviewBounds({ dx: PREVIEW_NUDGE_STEP });
+    return;
+  }
+
+  if (event.key.toLowerCase() === "w") {
+    event.preventDefault();
+    nudgePreviewBounds({ growX: PREVIEW_RESIZE_STEP });
+    return;
+  }
+
+  if (event.key.toLowerCase() === "h") {
+    event.preventDefault();
+    nudgePreviewBounds({ growY: PREVIEW_RESIZE_STEP });
   }
 });
 

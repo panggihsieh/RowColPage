@@ -204,6 +204,11 @@ h1 {
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }
 
+.question-preview-card[data-confirmed="true"] {
+  border-color: rgba(22, 163, 74, 0.3);
+  box-shadow: 0 8px 18px rgba(22, 163, 74, 0.08);
+}
+
 .question-preview-card:hover,
 .question-preview-card:focus-visible {
   transform: translateY(-1px);
@@ -249,6 +254,51 @@ h1 {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
 }
 
+.question-source-rect-editable {
+  pointer-events: auto;
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+  z-index: 2;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(217, 119, 6, 0.98);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+  touch-action: none;
+  z-index: 3;
+}
+
+.crop-handle-nw {
+  top: -7px;
+  left: -7px;
+  cursor: nwse-resize;
+}
+
+.crop-handle-ne {
+  top: -7px;
+  right: -7px;
+  cursor: nesw-resize;
+}
+
+.crop-handle-sw {
+  left: -7px;
+  bottom: -7px;
+  cursor: nesw-resize;
+}
+
+.crop-handle-se {
+  right: -7px;
+  bottom: -7px;
+  cursor: nwse-resize;
+}
+
 .question-preview-meta {
   display: grid;
   gap: 4px;
@@ -271,6 +321,11 @@ h1 {
 
 .question-preview-title {
   color: var(--ink) !important;
+}
+
+.question-preview-status {
+  font-weight: 700;
+  color: var(--accent-deep) !important;
 }
 
 .question-preview-empty {
@@ -336,6 +391,64 @@ body.preview-modal-open {
   margin-bottom: 18px;
 }
 
+.preview-modal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.preview-modal-toolbar-inline {
+  justify-content: flex-start;
+  margin-top: -2px;
+  margin-bottom: 2px;
+}
+
+.preview-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border: 1px solid rgba(154, 52, 18, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.preview-toolbar-move {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.preview-toolbar-row {
+  display: flex;
+  gap: 8px;
+}
+
+.preview-toolbar-zoom {
+  gap: 14px;
+}
+
+.preview-tool-button {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.preview-tool-button-wide {
+  width: auto;
+  min-width: 88px;
+  padding: 0 16px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
 .preview-modal-header h2,
 .preview-modal-header p,
 .preview-modal-card h3 {
@@ -369,11 +482,41 @@ body.preview-modal-open {
   gap: 12px;
 }
 
+.preview-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.preview-modal-actions-end {
+  justify-content: flex-end;
+}
+
+.preview-review-status {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.preview-text-field {
+  gap: 8px;
+}
+
+.preview-text-field textarea {
+  min-height: 180px;
+  resize: vertical;
+}
+
 .preview-zoom-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.preview-zoom-status {
+  display: flex;
+  justify-content: center;
 }
 
 .preview-zoom-button {
@@ -400,6 +543,7 @@ body.preview-modal-open {
 
 .preview-modal-source-preview {
   aspect-ratio: 4 / 3;
+  margin-top: 0;
 }
 
 .preview-modal-question-preview {
@@ -420,6 +564,8 @@ body.preview-modal-open {
   height: auto;
   object-fit: contain;
   display: block;
+  pointer-events: none;
+  user-select: none;
 }
 
 .preview-modal-question-stage {
@@ -432,6 +578,17 @@ body.preview-modal-open {
   max-height: 70vh;
   object-fit: contain;
   display: block;
+}
+
+@media (max-width: 960px) {
+  .preview-modal-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .preview-modal-toolbar {
+    justify-content: space-between;
+  }
 }
 
 .selector-body {
@@ -864,6 +1021,23 @@ body.preview-modal-open {
 
 .question-pane.has-image .cell-content {
   margin-top: 0;
+}
+
+.question-content-stack {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-height: 100%;
+  align-content: start;
+}
+
+.problem-text {
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  font-size: 0.95rem;
+  padding: 4px 2px 0;
 }
 
 .cell-content.is-empty {
