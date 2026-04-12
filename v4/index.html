@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>原始數學題目克隆簿</title>
+  <script>
+    (() => {
+      const version = "20260412e";
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("v") !== version) {
+        url.searchParams.set("v", version);
+        window.location.replace(url.toString());
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css?v=20260412e">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Math AI-Grid Notebook</p>
+        <p class="version-pill">版本：第四版 / 克隆原始數學題目</p>
+        <h1>原始數學題目克隆簿</h1>
+        <p class="subtitle">上傳含有題號的圖片或 PDF，根據題號規則自動定位題目區塊，開啟勾選頁挑題後，再依序帶入每一列左側題目區，形成可複習的原題版面。</p>
+      </div>
+      <div class="hero-actions">
+        <button id="resetButton" class="toggle-button secondary-button hero-reset-button" type="button">重設預設值</button>
+        <button id="printButton" class="primary-button" type="button">列印 / 另存 PDF</button>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="版面設定">
+      <label class="field">
+        <span>標題</span>
+        <input id="titleInput" type="text" value="大南六甲">
+      </label>
+
+      <label class="field field-hidden" aria-hidden="true">
+        <span>班級</span>
+        <input id="classInput" type="text" value="" tabindex="-1" autocomplete="off">
+      </label>
+
+      <label class="field">
+        <span>姓名</span>
+        <input id="nameInput" type="text" value="" placeholder="請輸入學生姓名">
+      </label>
+
+      <label class="field">
+        <span>日期</span>
+        <input id="dateInput" type="date">
+      </label>
+
+      <label class="field">
+        <span>起始編號</span>
+        <input id="startNumberInput" type="number" min="1" value="1">
+      </label>
+
+      <label class="field">
+        <span>頁數</span>
+        <input id="pageCountInput" type="number" min="1" max="50" value="1">
+      </label>
+
+      <label class="field">
+        <span>列數</span>
+        <input id="rowCountInput" type="number" min="1" max="12" value="4">
+      </label>
+
+      <label class="field">
+        <span>每格輔助線</span>
+        <select id="guideSelect">
+          <option value="horizontal" selected>橫線</option>
+          <option value="dot">點</option>
+          <option value="none">無</option>
+        </select>
+      </label>
+
+      <label class="field field-toggle">
+        <span>家長簽名</span>
+        <button id="signatureToggle" class="toggle-button" type="button" aria-pressed="true">顯示</button>
+      </label>
+
+      <div class="field field-wide helper-card">
+        <span>版型說明</span>
+        <p class="helper-text">第四版沿用左題目、右計算程序區的練習簿版型。來源可以是含有題號的圖片或 PDF。分析後會先在主頁顯示縮圖總覽，確認題目正確後再前往下一頁勾選，你仍可逐題手動更換、貼上或清除圖片。</p>
+      </div>
+    </section>
+
+    <section class="controls extraction-controls" aria-label="來源檔案抽題設定">
+      <label class="field field-wide">
+        <span>來源檔案（PDF 或圖片）</span>
+        <input id="sourceFileInput" type="file" accept="application/pdf,image/*" multiple>
+      </label>
+
+      <label class="field field-wide">
+        <span>標題規則（每行一條 RegExp 或關鍵字）</span>
+        <textarea id="titlePatternsInput" rows="4" spellcheck="false">^[（(]\s*[）)]\s*\d+\s*[.．、]
+^\d+\s*[.．、]
+^第\s*\d+\s*題</textarea>
+      </label>
+
+      <label class="field">
+        <span>左界 (%)</span>
+        <input id="leftPercentInput" type="number" min="0" max="95" value="4">
+      </label>
+
+      <label class="field">
+        <span>右界 (%)</span>
+        <input id="rightPercentInput" type="number" min="5" max="100" value="96">
+      </label>
+
+      <label class="field">
+        <span>標題上方留白</span>
+        <input id="topPaddingInput" type="number" min="0" max="120" value="8">
+      </label>
+
+      <label class="field">
+        <span>頁尾保留</span>
+        <input id="bottomPaddingInput" type="number" min="0" max="180" value="12">
+      </label>
+
+      <label class="field">
+        <span>下一題前間隔</span>
+        <input id="nextGapInput" type="number" min="0" max="120" value="10">
+      </label>
+
+      <div class="field field-wide extraction-actions">
+        <button id="extractPdfButton" class="primary-button" type="button">分析來源並顯示縮圖</button>
+        <button id="clearExtractedButton" class="toggle-button" type="button">清空抽題結果</button>
+      </div>
+
+      <div class="field field-wide helper-card">
+        <span>抽題說明</span>
+        <p class="helper-text">系統會先在來源檔案中尋找符合題號規則的文字行，再用該題號當作題目起點，向下裁到下一題題號之前。分析完成後會先顯示縮圖總覽；你可點任何一題放大檢查，確認題目無誤後再前往下一頁勾選。</p>
+      </div>
+    </section>
+
+    <section class="question-bank" aria-label="抽題結果">
+      <div class="question-bank-header">
+        <h2>抽題結果</h2>
+        <p id="extractionSummary" class="question-bank-summary">尚未載入來源檔案。</p>
+      </div>
+      <div id="questionPreviewList" class="question-preview-list"></div>
+      <div id="questionReviewActions" class="question-review-actions" hidden>
+        <p class="helper-text">請先點縮圖放大檢查；確認題目範圍都正確後，再前往下一頁。</p>
+        <button id="confirmExtractedButton" class="primary-button" type="button">確定題目，前往下一頁</button>
+      </div>
+    </section>
+
+    <main id="pages" class="pages guide-horizontal show-signature" aria-live="polite"></main>
+  </div>
+
+  <div id="previewModal" class="preview-modal" hidden>
+    <div class="preview-modal-backdrop" data-preview-close="true"></div>
+    <section class="preview-modal-panel" aria-modal="true" role="dialog" aria-labelledby="previewModalTitle">
+      <div class="preview-modal-header">
+        <div>
+          <p id="previewModalSource" class="preview-modal-source"></p>
+          <h2 id="previewModalTitle"></h2>
+          <p id="previewModalAnchor" class="preview-modal-anchor"></p>
+        </div>
+        <button id="previewModalCloseButton" class="toggle-button preview-modal-close" type="button">關閉</button>
+      </div>
+      <div class="preview-modal-grid">
+        <div class="preview-modal-card">
+          <h3>原始頁面定位</h3>
+          <div id="previewModalSourcePreview" class="preview-modal-source-preview"></div>
+        </div>
+        <div class="preview-modal-card">
+          <div class="preview-modal-card-header">
+            <h3>題目裁切預覽</h3>
+            <div class="preview-zoom-controls">
+              <button id="previewZoomOutButton" class="toggle-button preview-zoom-button" type="button">縮小</button>
+              <button id="previewZoomResetButton" class="toggle-button preview-zoom-button" type="button">100%</button>
+              <button id="previewZoomInButton" class="toggle-button preview-zoom-button" type="button">放大</button>
+              <span id="previewZoomValue" class="preview-zoom-value">100%</span>
+            </div>
+          </div>
+          <div id="previewModalQuestionPreview" class="preview-modal-question-preview"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <template id="pageTemplate">
+    <section class="page">
+      <div class="page-header">
+        <div class="page-heading">
+          <h2 class="page-title"></h2>
+          <div class="page-info">
+            <div class="page-info-item">版型：<span class="page-layout"></span></div>
+            <div class="page-info-item">姓名：<span class="page-name"></span></div>
+            <div class="page-info-item">日期：<span class="page-date"></span></div>
+          </div>
+        </div>
+        <div class="page-signature">
+          <span class="signature-label">
+            <span>家長</span>
+            <span>簽名</span>
+          </span>
+          <span class="signature-box" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div class="grid"></div>
+      <div class="page-meta"></div>
+    </section>
+  </template>
+
+  <template id="cellTemplate">
+    <article class="cell">
+      <div class="cell-layout">
+        <section class="question-pane">
+          <div class="cell-number"></div>
+          <div class="cell-toolbar">
+            <label class="cell-upload">
+              <span>上傳題圖</span>
+              <input class="cell-upload-input" type="file" accept="image/*">
+            </label>
+            <label class="cell-replace-upload">
+              <span>更換題圖</span>
+              <input class="cell-upload-input cell-replace-input" type="file" accept="image/*">
+            </label>
+            <button class="cell-paste-button" type="button">貼上題圖</button>
+            <button class="cell-clear-button" type="button">清除</button>
+          </div>
+          <div class="cell-content"></div>
+        </section>
+        <section class="work-pane">
+          <div class="work-pane-title">計算程序區</div>
+          <div class="work-pane-body"></div>
+        </section>
+      </div>
+      <div class="cell-guides" aria-hidden="true">
+        <span class="guide horizontal"></span>
+        <span class="guide vertical"></span>
+        <span class="guide dot"></span>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="app.js?v=20260412e"></script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>第四版題目勾選頁</title>
+  <script>
+    (() => {
+      const version = "20260412e";
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("v") !== version) {
+        url.searchParams.set("v", version);
+        window.location.replace(url.toString());
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css?v=20260412e">
+</head>
+<body class="selector-body">
+  <div class="selector-shell">
+    <header class="selector-header">
+      <div>
+        <p class="eyebrow">Math AI-Grid Notebook</p>
+        <p class="version-pill">第四版 / 題目勾選頁</p>
+        <h1>題目勾選頁</h1>
+        <p id="selectorStatus" class="subtitle">等待主頁送入來源檔案抽題結果。</p>
+      </div>
+      <div class="selector-actions">
+        <button id="selectAllButton" class="toggle-button" type="button">全選</button>
+        <button id="clearAllButton" class="toggle-button" type="button">全不選</button>
+        <button id="applySelectionButton" class="primary-button" type="button">套用勾選結果</button>
+        <button id="applyAndPrintButton" class="primary-button secondary-print-button" type="button">套用並列印</button>
+      </div>
+    </header>
+
+    <section class="selector-summary-card">
+      <p id="selectorSummary" class="selector-summary">尚未收到題目。</p>
+      <p class="helper-text">會依照來源檔案中的原本順序，將勾選到的題目依序插入主頁每一列左側題目區。</p>
+    </section>
+
+    <main id="selectorQuestionList" class="selector-question-list">
+      <div class="question-preview-empty">等待抽題資料。</div>
+    </main>
+  </div>
+
+  <script type="module" src="selector.js?v=20260412e"></script>
+</body>
+</html>
