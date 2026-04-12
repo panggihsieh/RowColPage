@@ -9,12 +9,15 @@ const SELECTOR_DB_NAME = "rowcolpage-v4";
 const SELECTOR_DB_STORE = "selectorPayload";
 const SELECTOR_DB_KEY = "latest";
 const PDF_RENDER_SCALE = 2.2;
+const OCR_LANGUAGE = "chi_tra+eng";
 const OCR_MODULE_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js";
 const CONTENT_RGB_THRESHOLD = 244;
 const CONTENT_ALPHA_THRESHOLD = 18;
 const CONTENT_MARGIN_PX = 28;
 const CROPPED_CONTENT_MARGIN_PX = 32;
 const MIN_CROP_SIZE = 24;
+const TEXT_BOUNDS_HORIZONTAL_PADDING = 24;
+const TEXT_BOUNDS_VERTICAL_PADDING = 12;
 
 const DEFAULT_SETTINGS = {
   title: "大南六甲",
@@ -608,6 +611,19 @@ function clampQuestionBounds(bounds, pageWidth, pageHeight) {
   };
 }
 
+function expandBoundsForText(bounds, pageWidth, pageHeight) {
+  return clampQuestionBounds(
+    {
+      left: bounds.left - TEXT_BOUNDS_HORIZONTAL_PADDING,
+      right: bounds.right + TEXT_BOUNDS_HORIZONTAL_PADDING,
+      top: bounds.top - TEXT_BOUNDS_VERTICAL_PADDING,
+      bottom: bounds.bottom + TEXT_BOUNDS_VERTICAL_PADDING,
+    },
+    pageWidth,
+    pageHeight,
+  );
+}
+
 function resetPreviewDraftState() {
   previewQuestionId = null;
   previewOriginalBounds = null;
@@ -896,7 +912,16 @@ function getPreviewFallbackText(question, bounds) {
   const sourcePage = latestSourcePages[question?.sourceIndex ?? -1];
   const titleMatchers = compileTitleMatchers(collectSettings().titlePatterns);
   const extractedText = sourcePage
-    ? extractQuestionText(sourcePage.lines, bounds, titleMatchers)
+    ? extractQuestionText(
+        sourcePage.lines,
+        expandBoundsForText(bounds, question.pageWidth, question.pageHeight),
+        titleMatchers,
+      )
+        || (
+          question?.textBounds
+            ? extractQuestionText(sourcePage.lines, question.textBounds, titleMatchers)
+            : ""
+        )
     : "";
 
   return normalizeMultilineText(extractedText || question?.detailText || question?.title || "");
@@ -1401,7 +1426,7 @@ async function getOcrWorker() {
   if (!ocrWorkerPromise) {
     ocrWorkerPromise = (async () => {
       const { createWorker } = await import(OCR_MODULE_URL);
-      return createWorker("eng");
+      return createWorker(OCR_LANGUAGE);
     })();
   }
 
@@ -1932,7 +1957,15 @@ async function extractQuestionsFromSources() {
       }
 
       const numberLabel = deriveQuestionNumberLabel(anchor.title, index + 1);
-      const detailText = extractQuestionText(sourcePages[anchor.sourceIndex].lines, bounds, titleMatchers) || anchor.title;
+      const textBounds = expandBoundsForText(roughBounds, anchor.pageWidth, anchor.pageHeight);
+      const detailText =
+        extractQuestionText(sourcePages[anchor.sourceIndex].lines, textBounds, titleMatchers)
+        || extractQuestionText(
+          sourcePages[anchor.sourceIndex].lines,
+          expandBoundsForText(bounds, anchor.pageWidth, anchor.pageHeight),
+          titleMatchers,
+        )
+        || anchor.title;
 
       questions.push({
         id: `q-${index + 1}`,
@@ -1945,6 +1978,7 @@ async function extractQuestionsFromSources() {
         pageWidth: anchor.pageWidth,
         pageHeight: anchor.pageHeight,
         bounds,
+        textBounds,
         imageUrl,
         pagePreviewUrl,
         overlay: buildOverlayFromBounds(bounds, anchor.pageWidth, anchor.pageHeight),
