@@ -2,7 +2,7 @@ import * as pdfjsLib from "./vendor/pdf.mjs";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("./vendor/pdf.worker.mjs", import.meta.url).toString();
 
-const APP_ASSET_VERSION = "20260413m";
+const APP_ASSET_VERSION = "20260413n";
 const STORAGE_KEY = "rowcolpage.v4.settings.v3";
 const SELECTOR_CHANNEL_NAME = "rowcolpage-v4-selector";
 const SELECTOR_DB_NAME = "rowcolpage-v4";
@@ -11,6 +11,7 @@ const SELECTOR_DB_KEY = "latest";
 const PDF_RENDER_SCALE = 2.2;
 const OCR_LANGUAGE = "chi_tra+eng";
 const OCR_MODULE_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js";
+const DEFAULT_SAMPLE_FILE_NAME = "範例.pdf";
 const CONTENT_RGB_THRESHOLD = 244;
 const CONTENT_ALPHA_THRESHOLD = 18;
 const CONTENT_MARGIN_PX = 28;
@@ -2386,14 +2387,14 @@ async function extractQuestionsFromSources() {
 }
 
 async function loadExampleSourceFile() {
-  const response = await fetch(`./example.pdf?v=${APP_ASSET_VERSION}`, { cache: "no-store" });
+  const response = await fetch(`./${encodeURIComponent(DEFAULT_SAMPLE_FILE_NAME)}?v=${APP_ASSET_VERSION}`, { cache: "no-store" });
 
   if (!response.ok) {
-    throw new Error(`Unable to load example.pdf: ${response.status}`);
+    throw new Error(`Unable to load ${DEFAULT_SAMPLE_FILE_NAME}: ${response.status}`);
   }
 
   const blob = await response.blob();
-  const file = new File([blob], "example.pdf", {
+  const file = new File([blob], DEFAULT_SAMPLE_FILE_NAME, {
     type: blob.type || "application/pdf",
     lastModified: Date.now(),
   });
@@ -2422,6 +2423,13 @@ function bootstrapExampleDemo() {
   })();
 
   return demoBootstrapPromise;
+}
+
+function loadDefaultExampleSource() {
+  return loadExampleSourceFile().catch((error) => {
+    console.warn(error);
+    extractionSummary.textContent = "尚未載入來源檔案。";
+  });
 }
 
 [titleInput, classInput, nameInput, dateInput, startNumberInput, pageCountInput, rowCountInput, guideSelect]
@@ -2457,6 +2465,7 @@ resetButton.addEventListener("click", () => {
   sourceFileInput.value = "";
   applySettings({ ...DEFAULT_SETTINGS });
   renderQuestionPreviewList();
+  void loadDefaultExampleSource();
   extractionSummary.textContent = "尚未載入來源檔案。";
   renderPages();
 });
@@ -2707,4 +2716,6 @@ renderPages();
 const searchParams = new URLSearchParams(window.location.search);
 if (searchParams.get("demo") === "example") {
   void bootstrapExampleDemo();
+} else {
+  void loadDefaultExampleSource();
 }
