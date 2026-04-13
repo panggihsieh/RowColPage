@@ -9,7 +9,7 @@
   <title>原始數學題目克隆簿</title>
   <script>
     (() => {
-      const version = "20260412g";
+      const version = "20260413m";
       const url = new URL(window.location.href);
       if (url.searchParams.get("v") !== version) {
         url.searchParams.set("v", version);
@@ -17,7 +17,7 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="styles.css?v=20260412g">
+  <link rel="stylesheet" href="styles.css?v=20260413m">
 </head>
 <body>
   <div class="app-shell">
@@ -169,10 +169,10 @@
         <div class="preview-modal-card">
           <div class="preview-modal-card-header">
             <h3>原始頁面定位</h3>
-            <button id="previewResetCropButton" class="toggle-button preview-zoom-button" type="button">恢復自動裁切</button>
           </div>
           <div class="preview-modal-toolbar preview-modal-toolbar-inline" aria-label="裁切工具列">
             <div class="preview-toolbar-group preview-toolbar-move" aria-label="移動裁切框">
+              <button id="previewResetCropButton" class="toggle-button preview-tool-button preview-tool-button-reset" type="button">恢復自動裁切</button>
               <button id="previewMoveUpButton" class="toggle-button preview-tool-button" type="button" aria-label="上移">↑</button>
               <div class="preview-toolbar-row">
                 <button id="previewMoveLeftButton" class="toggle-button preview-tool-button" type="button" aria-label="左移">←</button>
@@ -183,6 +183,8 @@
             <div class="preview-toolbar-group preview-toolbar-zoom" aria-label="縮放裁切框">
               <button id="previewWidenButton" class="toggle-button preview-tool-button preview-tool-button-wide" type="button" aria-label="加寬">加寬</button>
               <button id="previewHeightenButton" class="toggle-button preview-tool-button preview-tool-button-wide" type="button" aria-label="加高">加高</button>
+              <button id="previewNarrowButton" class="toggle-button preview-tool-button preview-tool-button-wide" type="button" aria-label="減寬">減寬</button>
+              <button id="previewShortenButton" class="toggle-button preview-tool-button preview-tool-button-wide" type="button" aria-label="減高">減高</button>
             </div>
           </div>
           <div id="previewModalSourcePreview" class="preview-modal-source-preview"></div>
@@ -204,7 +206,10 @@
           <div id="previewModalQuestionPreview" class="preview-modal-question-preview"></div>
           <label class="field field-wide preview-text-field">
             <span>題目文字（可手動修改）</span>
-            <textarea id="previewTextEditor" rows="8" spellcheck="false" placeholder="先確認裁切，再按「確認裁切並 AI 辨識」取得題目文字。"></textarea>
+            <div id="previewTextEditor" class="math-question-editor is-disabled" data-placeholder="先確認裁切，再按「確認裁切並 AI 辨識」取得題目文字。">
+              <div class="rich-question-text math-question-display" role="button" tabindex="0" data-placeholder="先確認裁切，再按「確認裁切並 AI 辨識」取得題目文字。"></div>
+              <textarea class="math-question-source" rows="8" spellcheck="false" aria-label="題目文字原始碼"></textarea>
+            </div>
           </label>
           <div class="preview-modal-actions preview-modal-actions-end">
             <button id="previewSaveButton" class="primary-button" type="button">確認文字並儲存此題</button>
@@ -270,6 +275,6 @@
     </article>
   </template>
 
-  <script type="module" src="app.js?v=20260412g"></script>
+  <script type="module" src="app.js?v=20260413m"></script>
 </body>
 </html>

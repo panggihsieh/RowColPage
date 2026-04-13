@@ -118,7 +118,8 @@ h1 {
 
 .field input,
 .field select,
-.field textarea {
+.field textarea,
+.rich-question-text {
   width: 100%;
   padding: 12px 14px;
   border-radius: 14px;
@@ -426,7 +427,9 @@ body.preview-modal-open {
 }
 
 .preview-toolbar-zoom {
-  gap: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(88px, auto));
+  gap: 10px 14px;
 }
 
 .preview-tool-button {
@@ -444,6 +447,14 @@ body.preview-modal-open {
 .preview-tool-button-wide {
   width: auto;
   min-width: 88px;
+  padding: 0 16px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.preview-tool-button-reset {
+  width: auto;
+  min-width: 152px;
   padding: 0 16px;
   font-size: 1rem;
   font-weight: 700;
@@ -502,9 +513,74 @@ body.preview-modal-open {
   gap: 8px;
 }
 
-.preview-text-field textarea {
+.math-question-editor {
+  position: relative;
+}
+
+.math-question-display,
+.math-question-source {
   min-height: 180px;
+  overflow: auto;
+  line-height: 1.75;
+}
+
+.rich-question-text {
+  white-space: pre-wrap;
+  outline: none;
+}
+
+.math-question-source {
+  display: none;
   resize: vertical;
+  font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  line-height: 1.6;
+}
+
+.math-question-display:focus,
+.math-question-source:focus {
+  border-color: rgba(217, 119, 6, 0.68);
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.14);
+}
+
+.math-question-editor.is-disabled .math-question-display {
+  color: var(--muted);
+  background: rgba(245, 245, 244, 0.8);
+}
+
+.math-question-editor.is-source-editing .math-question-display {
+  display: none;
+}
+
+.math-question-editor.is-source-editing .math-question-source {
+  display: block;
+}
+
+.math-question-editor:not(.is-source-editing) .math-question-display:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+}
+
+.math-fraction {
+  display: inline-grid;
+  grid-template-rows: auto auto;
+  align-items: center;
+  justify-items: center;
+  vertical-align: middle;
+  min-width: 1.15em;
+  margin: 0 0.08em;
+  line-height: 1;
+}
+
+.math-fraction-numerator,
+.math-fraction-denominator {
+  display: block;
+  padding: 0 0.12em;
+  font-size: 0.74em;
+  line-height: 1.05;
+}
+
+.math-fraction-numerator {
+  border-bottom: 1px solid currentColor;
 }
 
 .preview-zoom-controls {

@@ -1,4 +1,5 @@
 const STORAGE_KEY = "rowcolpage.v3.settings";
+const BUILTIN_SAMPLE_IMAGES = new Map([[0, "assets/1111.png"]]);
 
 const DEFAULT_SETTINGS = {
   title: "大南六甲",
@@ -13,9 +14,9 @@ const DEFAULT_SETTINGS = {
   showSignature: true,
 };
 
-const uploadedImages = new Map();
 const cellBindings = new Map();
 let activePasteImageIndex = null;
+const uploadedImages = new Map(BUILTIN_SAMPLE_IMAGES);
 
 const titleInput = document.querySelector("#titleInput");
 const classInput = document.querySelector("#classInput");
@@ -288,6 +289,15 @@ function bindCellUpload(cell, imageIndex) {
   });
 
   clearButton.addEventListener("click", () => {
+    const fallbackImage = BUILTIN_SAMPLE_IMAGES.get(imageIndex) ?? "";
+
+    if (fallbackImage) {
+      uploadedImages.set(imageIndex, fallbackImage);
+      renderCellImage(content, pane, fallbackImage);
+      clearButton.hidden = false;
+      return;
+    }
+
     uploadedImages.delete(imageIndex);
     renderCellImage(content, pane, "");
     clearButton.hidden = true;
@@ -369,6 +379,9 @@ resetButton.addEventListener("click", () => {
   localStorage.removeItem(STORAGE_KEY);
   uploadedImages.clear();
   activePasteImageIndex = null;
+  BUILTIN_SAMPLE_IMAGES.forEach((imageUrl, imageIndex) => {
+    uploadedImages.set(imageIndex, imageUrl);
+  });
   applySettings({ ...DEFAULT_SETTINGS });
   renderPages();
 });

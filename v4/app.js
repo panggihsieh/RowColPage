@@ -2,7 +2,7 @@ import * as pdfjsLib from "./vendor/pdf.mjs";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("./vendor/pdf.worker.mjs", import.meta.url).toString();
 
-const APP_ASSET_VERSION = "20260412g";
+const APP_ASSET_VERSION = "20260413m";
 const STORAGE_KEY = "rowcolpage.v4.settings.v3";
 const SELECTOR_CHANNEL_NAME = "rowcolpage-v4-selector";
 const SELECTOR_DB_NAME = "rowcolpage-v4";
@@ -104,6 +104,8 @@ const previewMoveRightButton = document.querySelector("#previewMoveRightButton")
 const previewMoveDownButton = document.querySelector("#previewMoveDownButton");
 const previewWidenButton = document.querySelector("#previewWidenButton");
 const previewHeightenButton = document.querySelector("#previewHeightenButton");
+const previewNarrowButton = document.querySelector("#previewNarrowButton");
+const previewShortenButton = document.querySelector("#previewShortenButton");
 const previewRunOcrButton = document.querySelector("#previewRunOcrButton");
 const previewReviewStatus = document.querySelector("#previewReviewStatus");
 const previewTextEditor = document.querySelector("#previewTextEditor");
@@ -161,11 +163,194 @@ function normalizeText(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function formatQuestionTextSpacing(value) {
+  return value.replace(/\(\s*\)\s*(\d+\s*[.．、])/gu, "(   )$1")
+    .replace(/（\s*）\s*(\d+\s*[.．、])/gu, "（   ）$1");
+}
+
+function appendPlainRichText(container, text) {
+  const parts = String(text ?? "").split("\n");
+
+  parts.forEach((part, index) => {
+    if (index > 0) {
+      container.appendChild(document.createElement("br"));
+    }
+
+    if (part) {
+      container.appendChild(document.createTextNode(part));
+    }
+  });
+}
+
+function createFractionElement(numerator, denominator) {
+  const fraction = document.createElement("span");
+  const numeratorElement = document.createElement("span");
+  const denominatorElement = document.createElement("span");
+
+  fraction.className = "math-fraction";
+  fraction.dataset.latex = `\\frac{${numerator}}{${denominator}}`;
+  fraction.contentEditable = "false";
+  numeratorElement.className = "math-fraction-numerator";
+  denominatorElement.className = "math-fraction-denominator";
+  numeratorElement.textContent = numerator;
+  denominatorElement.textContent = denominator;
+  fraction.append(numeratorElement, denominatorElement);
+
+  return fraction;
+}
+
+function renderRichQuestionText(container, text) {
+  const source = String(text ?? "");
+  const fractionPattern = /\\frac\{([^{}]+)\}\{([^{}]+)\}/g;
+  let lastIndex = 0;
+  let match = fractionPattern.exec(source);
+
+  container.replaceChildren();
+
+  while (match) {
+    appendPlainRichText(container, source.slice(lastIndex, match.index));
+    container.appendChild(createFractionElement(match[1], match[2]));
+    lastIndex = match.index + match[0].length;
+    match = fractionPattern.exec(source);
+  }
+
+  appendPlainRichText(container, source.slice(lastIndex));
+}
+
+function getRichQuestionText(container) {
+  if (!container) {
+    return "";
+  }
+
+  const readNode = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent ?? "";
+    }
+
+    if (node.nodeName === "BR") {
+      return "\n";
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return "";
+    }
+
+    if (node.classList.contains("math-fraction")) {
+      return node.dataset.latex ?? "";
+    }
+
+    return Array.from(node.childNodes).map(readNode).join("");
+  };
+
+  return Array.from(container.childNodes).map(readNode).join("");
+}
+
+function getQuestionEditorDisplay() {
+  return previewTextEditor?.querySelector(".math-question-display") ?? null;
+}
+
+function getQuestionEditorSource() {
+  return previewTextEditor?.querySelector(".math-question-source") ?? null;
+}
+
+function setQuestionEditorText(text) {
+  const display = getQuestionEditorDisplay();
+  const source = getQuestionEditorSource();
+
+  if (!display || !source || !previewTextEditor) {
+    return;
+  }
+
+  previewTextEditor.classList.remove("is-source-editing");
+  source.value = normalizeMultilineText(text);
+  renderRichQuestionText(display, source.value);
+}
+
+function getQuestionEditorText() {
+  const source = getQuestionEditorSource();
+  const display = getQuestionEditorDisplay();
+
+  if (previewTextEditor?.classList.contains("is-source-editing") && source) {
+    return normalizeMultilineText(source.value);
+  }
+
+  return normalizeMultilineText(getRichQuestionText(display));
+}
+
+function isQuestionEditorDisabled() {
+  return !previewTextEditor || previewTextEditor.getAttribute("aria-disabled") === "true";
+}
+
+function showQuestionEditorSource() {
+  const source = getQuestionEditorSource();
+
+  if (isQuestionEditorDisabled() || previewTextEditor.classList.contains("is-source-editing")) {
+    return;
+  }
+
+  const sourceText = getQuestionEditorText();
+  source.value = sourceText;
+  previewTextEditor.classList.add("is-source-editing");
+  window.setTimeout(() => {
+    source.focus();
+    source.setSelectionRange(source.value.length, source.value.length);
+  }, 0);
+}
+
+function renderQuestionEditorDisplay() {
+  const display = getQuestionEditorDisplay();
+  const source = getQuestionEditorSource();
+
+  if (!previewTextEditor || !previewTextEditor.classList.contains("is-source-editing")) {
+    return;
+  }
+
+  previewDraftText = getQuestionEditorText();
+  previewTextEditor.classList.remove("is-source-editing");
+  source.value = previewDraftText;
+  renderRichQuestionText(display, previewDraftText);
+  updatePreviewReviewStatus();
+}
+
+function setQuestionEditorDisabled(isDisabled) {
+  if (!previewTextEditor) {
+    return;
+  }
+
+  if (isDisabled) {
+    renderQuestionEditorDisplay();
+  }
+
+  const source = getQuestionEditorSource();
+
+  if (source) {
+    source.disabled = isDisabled;
+  }
+
+  previewTextEditor.setAttribute("aria-disabled", String(isDisabled));
+  previewTextEditor.classList.toggle("is-disabled", isDisabled);
+}
+
+function formatStackedMathItemsAsLatex(items) {
+  if (!items.length) {
+    return "";
+  }
+
+  if (items.length === 1) {
+    return items[0].text;
+  }
+
+  const [numerator, denominator, ...rest] = items.map((item) => item.text);
+  const fraction = `\\frac{${numerator}}{${denominator}}`;
+
+  return rest.length ? `${fraction}${rest.join("")}` : fraction;
+}
+
 function normalizeMultilineText(value) {
   return String(value ?? "")
     .replace(/\r/g, "")
     .split("\n")
-    .map((line) => line.replace(/\s+/g, " ").trim())
+    .map((line) => formatQuestionTextSpacing(line.replace(/\s+/g, " ").trim()))
     .filter(Boolean)
     .join("\n");
 }
@@ -434,7 +619,7 @@ function renderCellContent(container, pane, imageUrl, text = "") {
   if (text) {
     const problemText = document.createElement("div");
     problemText.className = "problem-text";
-    problemText.textContent = normalizeMultilineText(text);
+    renderRichQuestionText(problemText, normalizeMultilineText(text));
     stack.appendChild(problemText);
   }
 
@@ -707,19 +892,18 @@ function renderPreviewCropBox() {
 }
 
 function updatePreviewReviewStatus(statusText = "") {
-  const currentText = normalizeMultilineText(previewTextEditor?.value ?? previewDraftText);
-  const needsRecognition = previewCropDirty || !previewHasRecognizedText;
+  const currentText = previewTextEditor ? getQuestionEditorText() : normalizeMultilineText(previewDraftText);
+  const needsCropRecognition = previewCropDirty;
+  const canEditText = Boolean(previewQuestionId) && !needsCropRecognition;
 
   if (previewRunOcrButton) {
     previewRunOcrButton.disabled = previewRunOcrButton.dataset.busy === "true" || !previewQuestionId;
   }
 
-  if (previewTextEditor) {
-    previewTextEditor.disabled = Boolean(previewQuestionId) ? needsRecognition : true;
-  }
+  setQuestionEditorDisabled(!canEditText);
 
   if (previewSaveButton) {
-    previewSaveButton.disabled = !previewQuestionId || needsRecognition || !currentText;
+    previewSaveButton.disabled = !previewQuestionId || needsCropRecognition || !currentText;
   }
 
   if (previewReviewStatus) {
@@ -727,7 +911,7 @@ function updatePreviewReviewStatus(statusText = "") {
       previewReviewStatus.textContent = statusText;
     } else if (!previewQuestionId) {
       previewReviewStatus.textContent = "請先選擇題目。";
-    } else if (needsRecognition) {
+    } else if (needsCropRecognition) {
       previewReviewStatus.textContent = "裁切範圍已更新，請按「確認裁切並 AI 辨識」。";
     } else if (currentText) {
       previewReviewStatus.textContent = "AI 辨識完成，請檢查文字後儲存此題。";
@@ -927,6 +1111,16 @@ function getPreviewFallbackText(question, bounds) {
   return normalizeMultilineText(extractedText || question?.detailText || question?.title || "");
 }
 
+function getTextLayerQuestionText(sourcePage, bounds, pageWidth, pageHeight, titleMatchers) {
+  if (!sourcePage) {
+    return "";
+  }
+
+  return normalizeMultilineText(
+    extractQuestionText(sourcePage.lines, expandBoundsForText(bounds, pageWidth, pageHeight), titleMatchers),
+  );
+}
+
 async function runPreviewRecognition() {
   const question = findQuestionById(previewQuestionId);
 
@@ -940,19 +1134,22 @@ async function runPreviewRecognition() {
 
   try {
     const cropResult = await buildQuestionCropResult(question, previewDraftBounds);
-    const worker = await getOcrWorker();
-    const result = await worker.recognize(cropResult.canvas);
+    const sourcePage = latestSourcePages[question.sourceIndex];
     const fallbackText = getPreviewFallbackText(question, previewDraftBounds);
-    const recognizedText = normalizeMultilineText(result.data?.text ?? "") || fallbackText;
+    let recognizedText = fallbackText;
+
+    if (!recognizedText || sourcePage?.sourceType !== "pdf") {
+      const worker = await getOcrWorker();
+      const result = await worker.recognize(cropResult.canvas);
+      recognizedText = normalizeMultilineText(result.data?.text ?? "") || fallbackText;
+    }
 
     previewRecognizedText = recognizedText;
     previewHasRecognizedText = true;
     previewCropDirty = false;
     previewDraftText = recognizedText || question.detailText || question.title;
 
-    if (previewTextEditor) {
-      previewTextEditor.value = previewDraftText;
-    }
+    setQuestionEditorText(previewDraftText);
 
     await syncPreviewQuestionImage();
     updatePreviewReviewStatus("AI 辨識完成，請檢查文字後儲存此題。");
@@ -965,9 +1162,7 @@ async function runPreviewRecognition() {
     previewCropDirty = false;
     previewDraftText = fallbackText;
 
-    if (previewTextEditor) {
-      previewTextEditor.value = fallbackText;
-    }
+    setQuestionEditorText(fallbackText);
 
     await syncPreviewQuestionImage();
     updatePreviewReviewStatus(
@@ -983,7 +1178,7 @@ async function runPreviewRecognition() {
 
 async function savePreviewQuestion() {
   const question = findQuestionById(previewQuestionId);
-  const finalizedText = normalizeMultilineText(previewTextEditor?.value ?? previewDraftText);
+  const finalizedText = previewTextEditor ? getQuestionEditorText() : normalizeMultilineText(previewDraftText);
 
   if (!question || !previewDraftBounds || !finalizedText) {
     updatePreviewReviewStatus("請先完成 AI 辨識，並確認文字內容。");
@@ -1033,10 +1228,8 @@ function closePreviewModal() {
   previewQuestionZoom = 1;
   previewQuestionStage = null;
 
-  if (previewTextEditor) {
-    previewTextEditor.value = "";
-    previewTextEditor.disabled = true;
-  }
+  setQuestionEditorText("");
+  setQuestionEditorDisabled(true);
 
   if (previewRunOcrButton) {
     previewRunOcrButton.dataset.busy = "false";
@@ -1096,12 +1289,10 @@ async function openPreviewModal(question) {
 
   previewModalSource.textContent = question.sourceLabel;
   previewModalTitle.textContent = question.numberLabel;
-  previewModalAnchor.textContent = question.detailText || question.title;
+  renderRichQuestionText(previewModalAnchor, question.detailText || question.title);
   previewModalSourcePreview.replaceChildren(previewSourceStage);
 
-  if (previewTextEditor) {
-    previewTextEditor.value = previewDraftText;
-  }
+  setQuestionEditorText(previewDraftText);
 
   renderPreviewCropBox();
   const questionIndex = getQuestionIndexById(question.id) + 1;
@@ -1170,7 +1361,7 @@ function renderQuestionPreviewList() {
 
     const title = document.createElement("p");
     title.className = "question-preview-title";
-    title.textContent = question.detailText || question.title;
+    renderRichQuestionText(title, question.detailText || question.title);
 
     const status = document.createElement("p");
     status.className = "question-preview-status";
@@ -1414,8 +1605,11 @@ async function extractPdfLines(page) {
         items: sortedItems.map((item) => ({
           text: item.text,
           x: item.x,
+          y: item.y,
           width: item.width,
           height: item.height,
+          top: item.y - item.height,
+          bottom: item.y + item.height * 0.35,
         })),
       };
     }),
@@ -1491,6 +1685,181 @@ function matchTitleLines(lines, patterns, pageInfo) {
     }));
 }
 
+function isStackedMathLine(text) {
+  return /^[\d\s.,]+$/.test(normalizeText(text));
+}
+
+function shouldRebuildStackedMathLine(text, titleMatchers) {
+  return titleMatchers.some((pattern) => pattern.test(text))
+    || /[？?]|\([A-Da-dＡ-Ｄ]\)|（[A-Da-dＡ-Ｄ]）/.test(text);
+}
+
+function buildBoundedLine(line, bounds) {
+  const boundedItems = Array.isArray(line.items) && line.items.length
+    ? line.items
+        .filter((item) => {
+          const itemRight = item.x + Math.max(item.width || 0, 1);
+          return itemRight >= bounds.left && item.x <= bounds.right;
+        })
+        .map((item) => ({
+          ...item,
+          top: item.top ?? line.top,
+          bottom: item.bottom ?? line.bottom,
+        }))
+        .sort((a, b) => a.x - b.x)
+    : [];
+
+  return {
+    ...line,
+    boundedItems,
+  };
+}
+
+function joinPositionedItems(items) {
+  let text = "";
+
+  items.forEach((item, index) => {
+    const previous = items[index - 1];
+
+    if (!previous) {
+      text = item.text;
+      return;
+    }
+
+    const previousRight = previous.x + Math.max(previous.width || 0, 1);
+    const gap = item.x - previousRight;
+    text += gap > Math.max(6, item.height * 0.5) ? ` ${item.text}` : item.text;
+  });
+
+  return normalizeText(text);
+}
+
+function buildStackedMathText(anchorLine, nearbyMathLines) {
+  const tokens = anchorLine.boundedItems.map((item) => ({
+    text: item.text,
+    x: item.x,
+    width: item.width,
+    height: item.height,
+    top: item.top,
+  }));
+
+  const mathItems = nearbyMathLines
+    .flatMap((line) => line.boundedItems)
+    .filter((item) => /^\d+$/.test(item.text))
+    .sort((a, b) => a.x - b.x || a.top - b.top);
+  const groupedMathItems = [];
+
+  for (const item of mathItems) {
+    const center = item.x + Math.max(item.width || 0, 1) / 2;
+    const group = groupedMathItems.find((candidate) =>
+      Math.abs(candidate.center - center) <= Math.max(7, item.width * 0.75),
+    );
+
+    if (group) {
+      group.items.push(item);
+      group.center = (group.center * (group.items.length - 1) + center) / group.items.length;
+      continue;
+    }
+
+    groupedMathItems.push({
+      center,
+      items: [item],
+    });
+  }
+
+  groupedMathItems.forEach((group) => {
+    const sortedItems = group.items.sort((a, b) => a.top - b.top);
+    const text = formatStackedMathItemsAsLatex(sortedItems);
+    const left = Math.min(...sortedItems.map((item) => item.x));
+    const right = Math.max(...sortedItems.map((item) => item.x + Math.max(item.width || 0, 1)));
+    const top = Math.min(...sortedItems.map((item) => item.top));
+
+    tokens.push({
+      text,
+      x: left,
+      width: Math.max(1, right - left),
+      height: sortedItems[0]?.height ?? anchorLine.height ?? 8,
+      top,
+    });
+  });
+
+  return joinPositionedItems(tokens.sort((a, b) => a.x - b.x || a.top - b.top));
+}
+
+function buildTextLinesWithStackedMath(lines, bounds, titleMatchers) {
+  const boundedLines = lines
+    .filter((line) => line.bottom >= bounds.top && line.top <= bounds.bottom)
+    .filter((line) => line.right >= bounds.left && line.left <= bounds.right)
+    .map((line) => buildBoundedLine(line, bounds))
+    .filter((line) => !Array.isArray(line.items) || !line.items.length || line.boundedItems.length)
+    .sort((a, b) => a.top - b.top || a.left - b.left);
+  const consumedLineIndexes = new Set();
+
+  return boundedLines
+    .map((line, index) => {
+      if (consumedLineIndexes.has(index)) {
+        return "";
+      }
+
+      if (isStackedMathLine(line.text)) {
+        const belongsToAnchor = boundedLines.some((candidate, candidateIndex) => {
+          if (candidateIndex === index || !candidate.boundedItems.length) {
+            return false;
+          }
+
+          const candidateText = Array.isArray(candidate.items) && candidate.items.length
+            ? joinPositionedItems(candidate.boundedItems)
+            : normalizeText(candidate.text);
+          const verticalGap = Math.max(
+            0,
+            Math.max(line.top, candidate.top) - Math.min(line.bottom, candidate.bottom),
+          );
+          const overlapsHorizontally = line.right >= candidate.left - 8 && line.left <= candidate.right + 8;
+
+          return shouldRebuildStackedMathLine(candidateText, titleMatchers)
+            && overlapsHorizontally
+            && verticalGap <= Math.max(18, (candidate.bottom - candidate.top) * 1.7);
+        });
+
+        if (belongsToAnchor) {
+          return "";
+        }
+      }
+
+      if (!Array.isArray(line.items) || !line.items.length) {
+        return normalizeText(line.text);
+      }
+
+      const lineText = joinPositionedItems(line.boundedItems);
+
+      if (!shouldRebuildStackedMathLine(lineText, titleMatchers)) {
+        return lineText;
+      }
+
+      const nearbyMathLines = boundedLines.filter((candidate, candidateIndex) => {
+        if (candidateIndex === index || !candidate.boundedItems.length || !isStackedMathLine(candidate.text)) {
+          return false;
+        }
+
+        const verticalGap = Math.max(
+          0,
+          Math.max(line.top, candidate.top) - Math.min(line.bottom, candidate.bottom),
+        );
+        const overlapsHorizontally = candidate.right >= line.left - 8 && candidate.left <= line.right + 8;
+        const isNearby = overlapsHorizontally && verticalGap <= Math.max(18, (line.bottom - line.top) * 1.7);
+
+        if (isNearby) {
+          consumedLineIndexes.add(candidateIndex);
+        }
+
+        return isNearby;
+      });
+
+      return nearbyMathLines.length ? buildStackedMathText(line, nearbyMathLines) : lineText;
+    })
+    .filter(Boolean);
+}
+
 function extractQuestionText(lines, bounds, titleMatchers = []) {
   const textLines = lines
     .filter((line) => line.bottom >= bounds.top && line.top <= bounds.bottom)
@@ -1536,9 +1905,15 @@ function extractQuestionText(lines, bounds, titleMatchers = []) {
     })
     .filter(Boolean);
 
+  const stackedTextLines = buildTextLinesWithStackedMath(lines, bounds, titleMatchers);
+  const readableTextLines = stackedTextLines.length ? stackedTextLines : textLines;
+  const firstTitleLineIndex = readableTextLines.findIndex((textLine) =>
+    titleMatchers.some((pattern) => pattern.test(textLine)),
+  );
+  const candidateLines = firstTitleLineIndex > 0 ? readableTextLines.slice(firstTitleLineIndex) : readableTextLines;
   const mergedLines = [];
 
-  for (const textLine of textLines) {
+  for (const textLine of candidateLines) {
     if (mergedLines.length > 0 && titleMatchers.some((pattern) => pattern.test(textLine))) {
       break;
     }
@@ -1552,7 +1927,11 @@ function extractQuestionText(lines, bounds, titleMatchers = []) {
   const optionMatch = normalized.match(/^(.*?\(\s*[AaＡ]\s*\).*?\(\s*[DdＤ]\s*\)[^。]*(?:。|$))/u);
   const optionNormalized = optionMatch ? optionMatch[1].trim() : normalized;
 
-  return optionNormalized.replace(/([？?])\s+\d+\s+(\(\s*[AaＡ]\s*\))/u, "$1 $2").trim();
+  return optionNormalized
+    .replace(/([？?])\s+\d+\s+(\(\s*[AaＡ]\s*\))/u, "$1 $2")
+    .replace(/\(\s*\)\s*(\d+\s*[.．、])/gu, "(   )$1")
+    .replace(/（\s*）\s*(\d+\s*[.．、])/gu, "（   ）$1")
+    .trim();
 }
 
 async function buildSourcePages(files) {
@@ -1957,14 +2336,12 @@ async function extractQuestionsFromSources() {
       }
 
       const numberLabel = deriveQuestionNumberLabel(anchor.title, index + 1);
-      const textBounds = expandBoundsForText(roughBounds, anchor.pageWidth, anchor.pageHeight);
+      const sourcePage = sourcePages[anchor.sourceIndex];
+      const textBounds = expandBoundsForText(bounds, anchor.pageWidth, anchor.pageHeight);
+      const roughTextBounds = expandBoundsForText(roughBounds, anchor.pageWidth, anchor.pageHeight);
       const detailText =
-        extractQuestionText(sourcePages[anchor.sourceIndex].lines, textBounds, titleMatchers)
-        || extractQuestionText(
-          sourcePages[anchor.sourceIndex].lines,
-          expandBoundsForText(bounds, anchor.pageWidth, anchor.pageHeight),
-          titleMatchers,
-        )
+        getTextLayerQuestionText(sourcePage, bounds, anchor.pageWidth, anchor.pageHeight, titleMatchers)
+        || extractQuestionText(sourcePage.lines, roughTextBounds, titleMatchers)
         || anchor.title;
 
       questions.push({
@@ -2160,14 +2537,41 @@ previewWidenButton?.addEventListener("click", () => {
 previewHeightenButton?.addEventListener("click", () => {
   nudgePreviewBounds({ growY: PREVIEW_RESIZE_STEP });
 });
+previewNarrowButton?.addEventListener("click", () => {
+  nudgePreviewBounds({ growX: -PREVIEW_RESIZE_STEP });
+});
+previewShortenButton?.addEventListener("click", () => {
+  nudgePreviewBounds({ growY: -PREVIEW_RESIZE_STEP });
+});
 previewRunOcrButton?.addEventListener("click", () => {
   void runPreviewRecognition();
 });
+previewTextEditor?.addEventListener("click", () => {
+  showQuestionEditorSource();
+});
 previewTextEditor?.addEventListener("input", () => {
-  previewDraftText = previewTextEditor.value;
+  previewDraftText = getQuestionEditorText();
   updatePreviewReviewStatus();
 });
+previewTextEditor?.addEventListener("focusin", (event) => {
+  if (event.target?.classList?.contains("math-question-display")) {
+    showQuestionEditorSource();
+  }
+});
+previewTextEditor?.addEventListener("focusout", (event) => {
+  if (!previewTextEditor.contains(event.relatedTarget)) {
+    renderQuestionEditorDisplay();
+  }
+});
+previewTextEditor?.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && previewTextEditor.classList.contains("is-source-editing")) {
+    event.preventDefault();
+    renderQuestionEditorDisplay();
+    getQuestionEditorDisplay()?.focus();
+  }
+});
 previewSaveButton?.addEventListener("click", () => {
+  renderQuestionEditorDisplay();
   void savePreviewQuestion();
 });
 previewZoomOutButton?.addEventListener("click", () => {
@@ -2189,7 +2593,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (!previewModal || previewModal.hidden || document.activeElement === previewTextEditor) {
+  if (!previewModal || previewModal.hidden || previewTextEditor?.contains(document.activeElement)) {
     return;
   }
 

@@ -18,6 +18,53 @@ let selectorDbPromise = null;
 let questions = [];
 let checkedIds = new Set();
 
+function appendPlainRichText(container, text) {
+  const parts = String(text ?? "").split("\n");
+
+  parts.forEach((part, index) => {
+    if (index > 0) {
+      container.appendChild(document.createElement("br"));
+    }
+
+    if (part) {
+      container.appendChild(document.createTextNode(part));
+    }
+  });
+}
+
+function createFractionElement(numerator, denominator) {
+  const fraction = document.createElement("span");
+  const numeratorElement = document.createElement("span");
+  const denominatorElement = document.createElement("span");
+
+  fraction.className = "math-fraction";
+  numeratorElement.className = "math-fraction-numerator";
+  denominatorElement.className = "math-fraction-denominator";
+  numeratorElement.textContent = numerator;
+  denominatorElement.textContent = denominator;
+  fraction.append(numeratorElement, denominatorElement);
+
+  return fraction;
+}
+
+function renderRichQuestionText(container, text) {
+  const source = String(text ?? "");
+  const fractionPattern = /\\frac\{([^{}]+)\}\{([^{}]+)\}/g;
+  let lastIndex = 0;
+  let match = fractionPattern.exec(source);
+
+  container.replaceChildren();
+
+  while (match) {
+    appendPlainRichText(container, source.slice(lastIndex, match.index));
+    container.appendChild(createFractionElement(match[1], match[2]));
+    lastIndex = match.index + match[0].length;
+    match = fractionPattern.exec(source);
+  }
+
+  appendPlainRichText(container, source.slice(lastIndex));
+}
+
 function getSelectorDb() {
   if (!("indexedDB" in window)) {
     return Promise.resolve(null);
@@ -147,7 +194,7 @@ function renderQuestions() {
 
     const anchorText = document.createElement("p");
     anchorText.className = "selector-question-title";
-    anchorText.textContent = question.detailText || question.title;
+    renderRichQuestionText(anchorText, question.detailText || question.title);
 
     meta.append(title, source, anchorText);
     label.append(checkbox, sourcePreview, thumb, meta);
